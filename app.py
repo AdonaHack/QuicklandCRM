@@ -16,7 +16,7 @@ SCOPES = [
 ]
 
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "QuicklandCRM")
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1uLiPPRDzXIy3YqXCgO2Xtr2OoLcVATqVgBIo6UVhK58")
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 
 CFG_BASE = {
     "cupo": 40,
@@ -98,14 +98,34 @@ def login_required(f):
     return decorated_function
 
 # ==========================================================
-# LOGIN Y VISTAS POR ROL
+# LOGIN COMPATIBLE CON FETCH (JSON) Y FORMULARIO HTML
 # ==========================================================
 @app.route("/", methods=["GET", "POST"])
 @app.route("/login", methods=["GET", "POST"])
+@app.route("/api/login", methods=["POST"])
+@app.route("/auth", methods=["POST"])
 def login():
     if request.method == "POST":
-        usuario_input = (request.form.get("usuario") or request.form.get("username") or "").strip()
-        password_input = (request.form.get("password") or request.form.get("clave") or "").strip()
+        if request.is_json:
+            data = request.get_json(silent=True) or {}
+        else:
+            data = request.form.to_dict()
+            if not data:
+                data = request.get_json(force=True, silent=True) or {}
+
+        usuario_input = str(
+            data.get("usuario") or data.get("username") or data.get("user") or ""
+        ).strip()
+        password_input = str(
+            data.get("password") or data.get("clave") or data.get("pass") or data.get("contraseña") or ""
+        ).strip()
+
+        es_ajax = (
+            request.is_json
+            or request.path in ["/api/login", "/auth"]
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or "application/json" in request.headers.get("Accept", "")
+        )
 
         try:
             sh = get_spreadsheet()
@@ -122,7 +142,17 @@ def login():
 
                 if user_db.lower() == usuario_input.lower() and pass_db == password_input:
                     if estado_db not in ["activo", "1", "true", "si", "sí", ""]:
-                        flash("Tu usuario está Inactivo. Comunícate con el Administrador.", "error")
+                        msg = "Tu usuario está Inactivo. Comunícate con el Administrador."
+                        if es_ajax or request.data:
+                            return jsonify({
+                                "ok": False,
+                                "success": False,
+                                "status": "error",
+                                "error": msg,
+                                "msg": msg,
+                                "message": msg
+                            }), 403
+                        flash(msg, "error")
                         return render_template("login.html")
 
                     session["id_usuario"] = id_user_db
@@ -131,17 +161,52 @@ def login():
                     session["rol"] = rol_db
 
                     if rol_db == "ADMIN":
-                        return redirect(url_for("admin_view"))
+                        destino = url_for("admin_view")
                     elif rol_db in ["BACKOFFICE", "BACK", "BACK_OFFICE"]:
-                        return redirect(url_for("backoffice_view"))
+                        destino = url_for("backoffice_view")
                     elif rol_db == "POSTVENTA":
-                        return redirect(url_for("postventa_view"))
+                        destino = url_for("postventa_view")
                     else:
-                        return redirect(url_for("campo_view"))
+                        destino = url_for("campo_view")
 
-            flash("Usuario o contraseña incorrectos.", "error")
+                    if es_ajax or request.data:
+                        return jsonify({
+                            "ok": True,
+                            "success": True,
+                            "status": "success",
+                            "rol": rol_db,
+                            "role": rol_db.lower(),
+                            "nombre": nombre_db,
+                            "usuario": user_db,
+                            "redirect": destino,
+                            "redirect_url": destino,
+                            "url": destino
+                        })
+                    return redirect(destino)
+
+            msg_err = "Usuario o contraseña incorrectos."
+            if es_ajax or request.data:
+                return jsonify({
+                    "ok": False,
+                    "success": False,
+                    "status": "error",
+                    "error": msg_err,
+                    "msg": msg_err,
+                    "message": msg_err
+                }), 401
+            flash(msg_err, "error")
         except Exception as e:
-            flash(f"Error al conectar con Google Sheets: {e}", "error")
+            msg_ex = f"Error al conectar con Google Sheets: {str(e)}"
+            if es_ajax or request.data:
+                return jsonify({
+                    "ok": False,
+                    "success": False,
+                    "status": "error",
+                    "error": msg_ex,
+                    "msg": msg_ex,
+                    "message": msg_ex
+                }), 500
+            flash(msg_ex, "error")
 
     return render_template("login.html")
 
@@ -156,19 +221,7 @@ def campo_view():
     usuario = session.get("usuario")
     nombre = session.get("nombre", usuario)
     rol = session.get("rol", "VENTAS")
-    mis_ventas = []
-    try:
-        sh = get_spreadsheet()
-        ws_ventas = get_or_create_ventas_sheet(sh)
-        todas = ws_ventas.get_all_records()
-        for v in reversed(todas):
-            asesor_v = str(v.get("ASESOR") or v.get("Asesor") or v.get("Usuario") or "").strip()
-            if rol == "ADMIN" or asesor_v.lower() in [usuario.lower(), nombre.lower()]:
-                mis_ventas.append(v)
-    except Exception as e:
-        print(f"Aviso leyendo ventas: {e}")
-
-    return render_template("campo.html", usuario=usuario, nombre=nombre, rol=rol, mis_ventas=mis_ventas)
+    return render_template("campo.html", usuario=usuario, nombre=nombre, rol=rol)
 
 @app.route("/backoffice")
 @login_required
@@ -234,14 +287,14 @@ def api_registrar_venta():
             coordenadas=data.get("coordenadas", ""),
             plan=data.get("plan", ""),
             observaciones=data.get("observaciones", ""),
-            origen_base_id=data.get("origen_base_id", "MANUAL")
+            origen_base_id=data.get("origen_base_id", "EXTERNA")
         )
         return jsonify({"ok": True, "msg": f"Venta {id_v} enviada a la bandeja de Back Office."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al registrar venta: {str(e)}"}), 500
 
 # ==========================================================
-# API CAMPO: GESTIÓN DE HOJA 'BASE DE DATOS'
+# API CAMPO: GESTIÓN DE HOJA 'BASE DE DATOS' Y MIS VENTAS
 # ==========================================================
 @app.route("/api/campo/mi_base", methods=["GET"])
 @login_required
@@ -249,6 +302,7 @@ def api_campo_mi_base():
     try:
         usuario = session.get("usuario")
         nombre = session.get("nombre", usuario)
+        rol = session.get("rol", "VENTAS")
         identificadores = {usuario.lower(), nombre.lower()}
 
         sh = get_spreadsheet()
@@ -274,11 +328,22 @@ def api_campo_mi_base():
             elif ult_u.lower() in identificadores:
                 usados_hoy += 1
 
+        mis_ventas = []
+        try:
+            ws_ventas = get_or_create_ventas_sheet(sh)
+            for v in reversed(ws_ventas.get_all_records()):
+                asesor_v = str(v.get("ASESOR") or v.get("Asesor") or "").strip().lower()
+                if rol == "ADMIN" or asesor_v in identificadores:
+                    mis_ventas.append(v)
+        except Exception:
+            pass
+
         return jsonify({
             "ok": True,
             "usuario": nombre,
             "asignado": asignado_actual,
             "mis_cuentas": mis_cuentas,
+            "mis_ventas": mis_ventas,
             "usados": usados_hoy,
             "cupo_max": CFG_BASE["cupo"]
         })
@@ -364,6 +429,7 @@ def api_campo_tipificar():
         id_reg = str(data.get("id", "")).strip()
         fila_param = data.get("fila")
         sub = str(data.get("tipificacion", "")).strip()
+        plan_elegido = str(data.get("plan_elegido") or sub).strip()
         obs = str(data.get("observaciones", "")).strip()
         fecha_agenda = str(data.get("fecha_agenda", "")).strip()
         direccion_venta = str(data.get("direccion", "")).strip()
@@ -395,7 +461,7 @@ def api_campo_tipificar():
 
         nuevo_estado = str(rec.get("ESTADO", "LIBRE")).strip().upper()
         asignado_a = nombre
-        ult_usuario = nombre  # Guardamos quién lo gestionó para estadísticas de Back Office
+        ult_usuario = nombre
         vence = ""
         disponible = ""
         agenda = ""
@@ -410,7 +476,7 @@ def api_campo_tipificar():
             vence = ""
             disponible = (ahora + timedelta(days=CFG_BASE["diasRetorno"])).strftime("%Y-%m-%d")
 
-        if sub in ["Venta Móvil", "Venta Fija", "Venta Móvil y Fija"]:
+        if sub in ["Venta Móvil", "Venta Fija", "Venta Móvil y Fija"] or sub.startswith("Venta"):
             nuevo_estado = "VENDIDO"
             dni_o_ruc = str(rec.get("RUC") or rec.get("DNI") or "").strip()
             nom_cliente = str(rec.get("RAZON_SOCIAL") if rec.get("RAZON_SOCIAL") not in ["", "—"] else rec.get("NOMBRE")).strip()
@@ -423,7 +489,7 @@ def api_campo_tipificar():
                 distrito=str(rec.get("DISTRITO", "")),
                 direccion=direccion_venta,
                 coordenadas="",
-                plan=sub,
+                plan=plan_elegido,
                 observaciones=obs,
                 origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}")
             )
@@ -462,7 +528,7 @@ def api_campo_tipificar():
             asignado_a,     # J: ASIGNADO_A
             ult_usuario,    # K: ULT_USUARIO
             intentos,       # L: INTENTOS
-            sub,            # M: ULT_TIPIFICACION
+            plan_elegido,   # M: ULT_TIPIFICACION
             agenda,         # N: FECHA_AGENDA
             vence,          # O: FECHA_VENCE
             disponible,     # P: DISPONIBLE_DESDE
@@ -470,7 +536,7 @@ def api_campo_tipificar():
         ]]
         ws.update(f"I{fila_encontrada}:Q{fila_encontrada}", valores_actualizados)
 
-        mensaje_ok = f"Guardado: {sub}"
+        mensaje_ok = f"Guardado: {plan_elegido}"
         if id_venta_creada:
             mensaje_ok = f"¡Venta registrada! Enviada directo a Back Office ({id_venta_creada})."
 
@@ -484,19 +550,17 @@ def api_campo_tipificar():
         return jsonify({"ok": False, "msg": f"Error al guardar tipificación: {str(e)}"}), 500
 
 # ==========================================================
-# API BACKOFFICE Y ADMIN: DATOS + AVANCE DE EJECUTIVOS DE VENTAS
+# API BACKOFFICE Y ADMIN
 # ==========================================================
 @app.route("/api/backoffice/datos", methods=["GET"])
 @login_required
 def api_backoffice_datos():
-    """Devuelve Bandeja de Ventas, Base de Datos y el conteo exacto de gestión de cada usuario VENTAS."""
     try:
         sh = get_spreadsheet()
         ws_base = get_or_create_base_sheet(sh)
         ws_ventas = get_or_create_ventas_sheet(sh)
         ws_usuarios = get_or_create_usuarios_sheet(sh)
 
-        # 1. Leer todos los usuarios (especialmente los de ROL = VENTAS)
         raw_usuarios = ws_usuarios.get_all_records()
         usuarios_list = []
         ejecutivos_stats = {}
@@ -524,7 +588,6 @@ def api_backoffice_datos():
                     "ventas_totales": 0
                 }
 
-        # 2. Leer BASE DE DATOS y contabilizar cuánto va gestionando cada ejecutivo
         raw_base = ws_base.get_all_records()
         base_list = []
         for idx, r in enumerate(raw_base, start=2):
@@ -570,7 +633,6 @@ def api_backoffice_datos():
                 elif st in ["LIBRE", "EXCLUIDO", "BLOQUEADO"]:
                     ek["no_efectivos"] += 1
 
-        # 3. Leer Ventas totales en QuicklandCRM_Ventas
         raw_ventas = ws_ventas.get_all_records()
         ventas_list = []
         for idx, v in enumerate(raw_ventas, start=2):
@@ -610,7 +672,7 @@ def api_backoffice_actualizar_venta():
         ws_ventas = get_or_create_ventas_sheet(sh)
         ws_ventas.update(f"L{fila}:M{fila}", [[nuevo_estado, comentario_back]])
 
-        if origen_base_id and origen_base_id != "MANUAL":
+        if origen_base_id and origen_base_id not in ["MANUAL", "EXTERNA"]:
             ws_base = get_or_create_base_sheet(sh)
             registros_base = ws_base.get_all_records()
             for idx, r in enumerate(registros_base, start=2):
