@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>QuicklanCRM · Back Office</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    :root {
+      --bg: #fff9f5; --surface: #ffffff; --sunken: #fff7ed;
+      --ink: #1c1917; --muted: #78716c; --line: #fed7aa;
+      --primary: #ea580c; --primary-dark: #c2410c; --primary-light: #ffedd5;
+      --primary-glow: rgba(234, 88, 12, 0.22);
+      --gradient: linear-gradient(135deg, #c2410c 0%, #ea580c 55%, #f59e0b 100%);
+      --ok: #10b981; --ok-soft: #d1fae5; --ok-ink: #065f46;
+      --warn: #f59e0b; --warn-soft: #fef3c7; --warn-ink: #92400e;
+      --bad: #ef4444; --bad-soft: #fee2e2; --bad-ink: #991b1b;
+      --info: #2563eb; --info-soft: #dbeafe; --info-ink: #1e40af;
+      --f-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+      --f-mono: "JetBrains Mono", monospace;
+      --radius: 16px;
+      --shadow: 0 10px 30px -5px rgba(194, 65, 12, 0.08), 0 4px 12px -2px rgba(194, 65, 12, 0.04);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg);
+      background-image: radial-gradient(at 0% 0%, rgba(249, 115, 22, 0.12) 0px, transparent 50%),
+                        radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.10) 0px, transparent 50%);
+      color: var(--ink); font-family: var(--f-sans); font-size: 14.5px; line-height: 1.5; padding-bottom: 50px;
+    }
+    .mono { font-family: var(--f-mono); font-size: 0.9em; }
+    .wrap { max-width: 1360px; margin: 0 auto; padding-inline: 18px; }
+
+    header.hero-bar {
+      background: var(--gradient); color: #fff; padding: 18px 0;
+      box-shadow: 0 8px 25px -4px rgba(234, 88, 12, 0.35);
+      margin-bottom: 26px; position: sticky; top: 0; z-index: 40;
+    }
+    .hero-inner { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.22);
+      display: grid; place-items: center; font-weight: 800; font-size: 1.2rem;
+    }
+    .brand h1 { font-size: 1.3rem; font-weight: 800; margin: 0; }
+    .brand .tag {
+      font-size: 0.74rem; font-weight: 800; text-transform: uppercase;
+      background: rgba(255,255,255,0.24); color: #fff; padding: 4px 12px; border-radius: 99px;
+    }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .seg { display: inline-flex; background: rgba(28, 25, 23, 0.25); padding: 4px; border-radius: 99px; }
+    .seg button {
+      border: 0; background: transparent; color: rgba(255,255,255,0.88);
+      font: 700 0.86rem var(--f-sans); padding: 8px 16px; border-radius: 99px; cursor: pointer;
+    }
+    .seg button[aria-pressed="true"] { background: #ffffff; color: var(--primary-dark); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+
+    select, input {
+      font: inherit; color: var(--ink); background: #fff;
+      border: 1.5px solid var(--line); border-radius: 9px; padding: 7px 11px;
+    }
+    .btn {
+      border: 0; background: var(--gradient); color: #fff; font: 700 0.86rem var(--f-sans);
+      padding: 8px 15px; border-radius: 9px; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px var(--primary-glow);
+    }
+    .btn.ghost { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #fdba74; box-shadow: none; }
+    .btn.top-btn { background: rgba(255,255,255,0.2); color: #fff; box-shadow: none; }
+    .btn.sm { padding: 6px 12px; font-size: 0.8rem; }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--primary);
+      border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow);
+    }
+    .kpi b { display: block; font: 800 1.75rem var(--f-sans); color: var(--primary-dark); line-height: 1.1; margin-bottom: 4px; }
+    .kpi span { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 22px; box-shadow: var(--shadow); }
+    .panel h2 { font-size: 1.1rem; font-weight: 800; margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; }
+    .panel h2 small { font: 600 0.82rem var(--f-sans); color: var(--muted); }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .tbl { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ffedd5; white-space: nowrap; vertical-align: middle; }
+    th {
+      position: sticky; top: 0; background: #fff7ed; font: 800 0.72rem var(--f-sans);
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary-dark); z-index: 2; border-bottom: 2px solid #fed7aa;
+    }
+    tr:hover td { background: #fffaf5; }
+    td.obs { white-space: normal; min-width: 180px; max-width: 280px; font-size: 0.82rem; color: var(--muted); }
+
+    .bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+    .bar-bg { flex: 1; height: 8px; background: #ffedd5; border-radius: 99px; overflow: hidden; }
+    .bar-fill { display: block; height: 100%; background: var(--gradient); border-radius: 99px; }
+
+    .pill { display: inline-block; font: 700 0.71rem var(--f-sans); text-transform: uppercase; padding: 4px 10px; border-radius: 99px; }
+    .p-libre { background: #f5f5f4; color: #57534e; }
+    .p-asig { background: var(--info-soft); color: var(--info-ink); }
+    .p-gest, .p-warn { background: var(--warn-soft); color: var(--warn-ink); }
+    .p-agen { background: var(--primary-light); color: var(--primary-dark); }
+    .p-vend { background: var(--ok-soft); color: var(--ok-ink); }
+    .p-excl, .p-bloq { background: var(--bad-soft); color: var(--bad-ink); }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+      background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 12px; font-weight: 600; z-index: 99;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header class="hero-bar">
+  <div class="wrap hero-inner">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <h1>QuicklanCRM · Back Office</h1>
+      <span class="tag">BACK OFFICE · {{ nombre or usuario }}</span>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group">
+        <button id="btnTabVentas" aria-pressed="true" type="button">🔥 Bandeja de Ventas</button>
+        <button id="btnTabBase" aria-pressed="false" type="button">📊 Base de Datos y Avance Ventas</button>
+      </div>
+      <button type="button" class="btn top-btn sm" onclick="cargarDatosBack()">🔄 Sincronizar</button>
+      <a href="/logout" class="btn top-btn sm">Salir</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- SECCIÓN 1: BANDEJA DE VENTAS -->
+  <main id="secVentas">
+    <div class="kpis" id="kpiVentas"></div>
+
+    <section class="panel">
+      <h2>
+        <span>🔥 Bandeja de Ventas (Validación y Cambio de Estado)</span>
+        <small id="contadorVentas">Cargando...</small>
+      </h2>
+      <div class="filters">
+        <select id="filtroEstadoVenta" onchange="renderVentas()">
+          <option value="TODOS">📋 Todos los estados</option>
+          <option value="PENDIENTE VALIDACIÓN">⏳ PENDIENTE VALIDACIÓN</option>
+          <option value="APROBADO">✅ APROBADO</option>
+          <option value="EN INSTALACIÓN">🛠️ EN INSTALACIÓN</option>
+          <option value="INSTALADO / ACTIVADO">🎉 INSTALADO / ACTIVADO</option>
+          <option value="OBSERVADO">⚠️ OBSERVADO</option>
+          <option value="RECHAZADO">🚫 RECHAZADO</option>
+        </select>
+        <input type="search" id="buscarVenta" placeholder="🔍 Buscar RUC, DNI, cliente o ejecutivo..." oninput="renderVentas()" style="min-width:280px;flex:1;">
+      </div>
+
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>ID Venta</th>
+              <th>Fecha</th>
+              <th>Ejecutivo Ventas</th>
+              <th>Origen</th>
+              <th>DNI / RUC</th>
+              <th>Cliente / Razón Social</th>
+              <th>Celular</th>
+              <th>Distrito / Dirección</th>
+              <th>Plan</th>
+              <th>Obs. Ejecutivo</th>
+              <th>Estado Back Office</th>
+              <th>Feedback Back Office</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyVentas"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- SECCIÓN 2: AVANCE DE EJECUTIVOS + BASE DE DATOS -->
+  <main id="secBase" hidden>
+    <div class="kpis" id="kpiBase"></div>
+
+    <section class="panel">
+      <h2>
+        <span>📈 Cuánto van Gestionando los Ejecutivos de Ventas</span>
+        <small id="cupoLabel">Cupo diario por asesor: 40</small>
+      </h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Ejecutivo (Rol: VENTAS)</th>
+              <th>Usuario</th>
+              <th>Avance de Cupo (Gestionados)</th>
+              <th>Asignado Ahora</th>
+              <th>En Gestión (Interesados)</th>
+              <th>Agendados</th>
+              <th>No Efectivos / Devueltos</th>
+              <th>Ventas de Base</th>
+              <th>Total Ventas (Global)</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyResumenAsesores"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        <span>📂 Registros de la Hoja BASE DE DATOS</span>
+        <small id="contadorBase">0 registros</small>
+      </h2>
+      <div class="filters">
+        <select id="filtroEstadoBase" onchange="renderBaseBack()">
+          <option value="TODOS">📋 TODOS LOS ESTADOS</option>
+          <option value="LIBRE">LIBRE</option>
+          <option value="ASIGNADO">ASIGNADO</option>
+          <option value="EN GESTIÓN">EN GESTIÓN</option>
+          <option value="AGENDADO">AGENDADO</option>
+          <option value="VENDIDO">VENDIDO</option>
+          <option value="EXCLUIDO">EXCLUIDO</option>
+          <option value="BLOQUEADO">BLOQUEADO</option>
+        </select>
+        <input type="search" id="buscarBase" placeholder="🔍 Buscar RUC, DNI, empresa o ejecutivo..." oninput="renderBaseBack()" style="min-width:280px;flex:1;">
+      </div>
+
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Tipo</th>
+              <th>RUC</th>
+              <th>Razón Social</th>
+              <th>DNI</th>
+              <th>Contacto</th>
+              <th>Distrito</th>
+              <th>Celular</th>
+              <th>Estado</th>
+              <th>Asignado a</th>
+              <th>Intentos</th>
+              <th>Últ. Tipificación</th>
+              <th>Observaciones</th>
+              <th>Guardar</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyBase"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+let listaVentas = [];
+let listaBase = [];
+let listaEjecutivos = [];
+let cupoDiario = 40;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.hidden = true, 3000);
+}
+
+async function cargarDatosBack() {
+  try {
+    const res = await fetch("/api/backoffice/datos");
+    const data = await res.json();
+    if (!data.ok) return toast(data.msg || "Error al cargar datos");
+
+    listaVentas = data.ventas || [];
+    listaBase = data.base || [];
+    listaEjecutivos = data.ejecutivos || [];
+    cupoDiario = data.cupo_max || 40;
+
+    renderVentas();
+    renderBaseBack();
+  } catch (err) {
+    toast("Error de conexión con el servidor.");
+  }
+}
+
+function renderVentas() {
+  const estadosVenta = ["PENDIENTE VALIDACIÓN", "APROBADO", "EN INSTALACIÓN", "INSTALADO / ACTIVADO", "OBSERVADO", "RECHAZADO"];
+  $("kpiVentas").innerHTML = estadosVenta.map(st => {
+    const cant = listaVentas.filter(v => String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase() === st).length;
+    return `<div class="kpi"><b>${cant}</b><span>${st}</span></div>`;
+  }).join("");
+
+  const fEst = $("filtroEstadoVenta").value;
+  const q = $("buscarVenta").value.toLowerCase().trim();
+
+  const filtradas = listaVentas.filter(v => {
+    const est = String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase();
+    const okEst = fEst === "TODOS" || est === fEst;
+    const texto = [v.ID_VENTA, v.ASESOR, v.DNI_RUC, v.CLIENTE, v.CELULAR, v.DISTRITO, v.PLAN].join(" ").toLowerCase();
+    return okEst && (!q || texto.includes(q));
+  });
+
+  $("contadorVentas").textContent = `${filtradas.length} de ${listaVentas.length} ventas`;
+
+  if (!filtradas.length) {
+    $("tbodyVentas").innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:28px;">No hay ventas registradas con ese filtro.</td></tr>`;
+    return;
+  }
+
+  $("tbodyVentas").innerHTML = filtradas.map(v => {
+    const fila = v._fila;
+    const estActual = String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase();
+    const origen = v.ORIGEN_BASE_ID || "MANUAL";
+    return `
+      <tr>
+        <td class="mono"><b>${esc(v.ID_VENTA || "#" + fila)}</b></td>
+        <td class="mono">${esc(v.FECHA)}</td>
+        <td><b style="color:var(--primary-dark);">${esc(v.ASESOR)}</b></td>
+        <td><span class="pill ${origen !== 'MANUAL' ? 'p-agen' : 'p-libre'}">${esc(origen)}</span></td>
+        <td class="mono">${esc(v.DNI_RUC)}</td>
+        <td><b>${esc(v.CLIENTE)}</b></td>
+        <td class="mono">${esc(v.CELULAR)}</td>
+        <td>${esc(v.DISTRITO)}${v.DIRECCION ? `<br><small style="color:var(--muted)">📍 ${esc(v.DIRECCION)}</small>` : ""}</td>
+        <td><span class="pill p-vend">${esc(v.PLAN)}</span></td>
+        <td class="obs">${esc(v.OBSERVACIONES || "—")}</td>
+        <td>
+          <select id="estVenta_${fila}" style="font-weight:700;">
+            ${estadosVenta.map(st => `<option value="${st}" ${estActual === st ? "selected" : ""}>${st}</option>`).join("")}
+          </select>
+        </td>
+        <td>
+          <input type="text" id="comVenta_${fila}" value="${esc(v.COMENTARIO_BACK || "")}" placeholder="Comentario para el ejecutivo..." style="min-width:180px;">
+        </td>
+        <td>
+          <button type="button" class="btn sm" onclick="guardarEstadoVenta(${fila}, '${esc(origen)}')">Guardar</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function guardarEstadoVenta(fila, origenBaseId) {
+  const estado = $(`estVenta_${fila}`).value;
+  const comentario = $(`comVenta_${fila}`).value;
+  try {
+    const res = await fetch("/api/backoffice/actualizar_venta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fila, estado, comentario_back: comentario, origen_base_id: origenBaseId })
+    });
+    const data = await res.json();
+    toast(`✅ ${data.msg || "Venta actualizada"}`);
+    if (data.ok) cargarDatosBack();
+  } catch (err) {
+    toast("Error al actualizar la venta.");
+  }
+}
+
+function renderBaseBack() {
+  const estadosBase = [
+    ["LIBRE", "Libres en Base"],
+    ["ASIGNADO", "Asignados Ahora"],
+    ["EN GESTIÓN", "En Gestión"],
+    ["AGENDADO", "Agendados"],
+    ["VENDIDO", "Vendidos"],
+    ["EXCLUIDO", "Excluidos"],
+    ["BLOQUEADO", "Bloqueados"]
+  ];
+
+  $("kpiBase").innerHTML = estadosBase.map(([k, label]) => {
+    const cant = listaBase.filter(r => String(r.ESTADO || "LIBRE").toUpperCase() === k).length;
+    return `<div class="kpi"><b>${cant}</b><span>${label}</span></div>`;
+  }).join("");
+
+  $("tbodyResumenAsesores").innerHTML = listaEjecutivos.length ? listaEjecutivos.map(e => {
+    const pct = Math.min(100, Math.round((e.gestionados_total / cupoDiario) * 100));
+    return `
+      <tr>
+        <td><b>${esc(e.nombre)}</b></td>
+        <td class="mono">${esc(e.usuario)}</td>
+        <td>
+          <div class="bar-wrap">
+            <span class="mono"><b>${e.gestionados_total}</b>/${cupoDiario}</span>
+            <div class="bar-bg"><i class="bar-fill" style="width:${pct}%"></i></div>
+          </div>
+        </td>
+        <td class="mono"><span class="pill p-asig">${e.asignados_ahora}</span></td>
+        <td class="mono"><b>${e.en_gestion}</b></td>
+        <td class="mono"><b>${e.agendados}</b></td>
+        <td class="mono">${e.no_efectivos}</td>
+        <td class="mono"><span class="pill p-vend">${e.ventas_base}</span></td>
+        <td class="mono"><b style="color:var(--ok-ink);">${e.ventas_totales}</b></td>
+      </tr>
+    `;
+  }).join("") : `<tr><td colspan="9" style="color:var(--muted);padding:16px;">No hay usuarios con rol VENTAS registrados.</td></tr>`;
+
+  const fEst = $("filtroEstadoBase").value;
+  const q = $("buscarBase").value.toLowerCase().trim();
+
+  const filas = listaBase.filter(r => {
+    const st = String(r.ESTADO || "LIBRE").toUpperCase();
+    const okEst = fEst === "TODOS" || st === fEst;
+    const txt = [r.ID, r.RUC, r.RAZON_SOCIAL, r.DNI, r.NOMBRE, r.DISTRITO, r.ASIGNADO_A, r.ULT_USUARIO, r.ULT_TIPIFICACION].join(" ").toLowerCase();
+    return okEst && (!q || txt.includes(q));
+  });
+
+  $("contadorBase").textContent = `${filas.length} de ${listaBase.length} registros`;
+
+  $("tbodyBase").innerHTML = filas.map(r => {
+    const fila = r._fila;
+    const stActual = String(r.ESTADO || "LIBRE").toUpperCase();
+    return `
+      <tr>
+        <td class="mono"><b>${esc(r.ID)}</b></td>
+        <td>${esc(r.TIPO || "—")}</td>
+        <td class="mono">${esc(r.RUC || "—")}</td>
+        <td><b>${esc(r.RAZON_SOCIAL || "—")}</b></td>
+        <td class="mono">${esc(r.DNI || "—")}</td>
+        <td>${esc(r.NOMBRE || "—")}</td>
+        <td>${esc(r.DISTRITO || "—")}</td>
+        <td class="mono">${esc(r.CELULAR || "—")}</td>
+        <td>
+          <select id="estBase_${fila}" style="font-weight:700;">
+            ${["LIBRE","ASIGNADO","EN GESTIÓN","AGENDADO","VENDIDO","EXCLUIDO","BLOQUEADO"].map(op => `
+              <option value="${op}" ${stActual === op ? "selected" : ""}>${op}</option>
+            `).join("")}
+          </select>
+        </td>
+        <td>
+          <input type="text" id="asigBase_${fila}" value="${esc(r.ASIGNADO_A || "")}" placeholder="Sin asignar" style="width:135px;">
+        </td>
+        <td class="mono">${r.INTENTOS || 0}</td>
+        <td>${esc(r.ULT_TIPIFICACION || "—")}</td>
+        <td class="obs">${esc(r.MOTIVO_OBSERVACION || "—")}</td>
+        <td>
+          <button type="button" class="btn ghost sm" onclick="guardarFilaBase(${fila})">Guardar</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function guardarFilaBase(fila) {
+  const estado = $(`estBase_${fila}`).value;
+  const asignado_a = $(`asigBase_${fila}`).value;
+  try {
+    const res = await fetch("/api/backoffice/actualizar_base", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fila, estado, asignado_a })
+    });
+    const data = await res.json();
+    toast(`✅ ${data.msg || "Base actualizada"}`);
+    if (data.ok) cargarDatosBack();
+  } catch (err) {
+    toast("Error al actualizar registro de la base.");
+  }
+}
+
+$("btnTabVentas").onclick = () => {
+  $("btnTabVentas").setAttribute("aria-pressed", "true");
+  $("btnTabBase").setAttribute("aria-pressed", "false");
+  $("secVentas").hidden = false;
+  $("secBase").hidden = true;
+};
+$("btnTabBase").onclick = () => {
+  $("btnTabVentas").setAttribute("aria-pressed", "false");
+  $("btnTabBase").setAttribute("aria-pressed", "true");
+  $("secVentas").hidden = true;
+  $("secBase").hidden = false;
+};
+
+document.addEventListener("DOMContentLoaded", cargarDatosBack);
+</script>
+</body>
+</html>

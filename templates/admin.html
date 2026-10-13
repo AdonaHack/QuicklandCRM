@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>QuicklanCRM · Panel Administrador Total</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --sunken: #f1f5f9;
+      --ink: #0f172a; --muted: #64748b; --line: #e2e8f0;
+      --primary: #4f46e5; --primary-dark: #3730a3; --primary-light: #e0e7ff;
+      --accent-orange: #ea580c;
+      --gradient: linear-gradient(135deg, #0f172a 0%, #312e81 50%, #4f46e5 100%);
+      --ok: #10b981; --ok-soft: #d1fae5; --ok-ink: #065f46;
+      --warn: #f59e0b; --warn-soft: #fef3c7; --warn-ink: #92400e;
+      --bad: #ef4444; --bad-soft: #fee2e2; --bad-ink: #991b1b;
+      --f-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+      --f-mono: "JetBrains Mono", monospace;
+      --radius: 16px;
+      --shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 14.5px; line-height: 1.5; padding-bottom: 50px; }
+    .mono { font-family: var(--f-mono); font-size: 0.9em; }
+    .wrap { max-width: 1380px; margin: 0 auto; padding-inline: 18px; }
+
+    header.hero-bar {
+      background: var(--gradient); color: #fff; padding: 18px 0;
+      box-shadow: 0 8px 25px -4px rgba(15, 23, 42, 0.35);
+      margin-bottom: 24px; position: sticky; top: 0; z-index: 40;
+    }
+    .hero-inner { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,0.18);
+      display: grid; place-items: center; font-size: 1.25rem;
+    }
+    .brand h1 { font-size: 1.3rem; font-weight: 800; margin: 0; }
+    .brand .tag {
+      font-size: 0.73rem; font-weight: 800; text-transform: uppercase;
+      background: #f59e0b; color: #1c1917; padding: 4px 12px; border-radius: 99px;
+    }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .seg { display: inline-flex; background: rgba(255,255,255,0.12); padding: 4px; border-radius: 99px; flex-wrap: wrap; }
+    .seg button {
+      border: 0; background: transparent; color: rgba(255,255,255,0.85);
+      font: 700 0.84rem var(--f-sans); padding: 8px 15px; border-radius: 99px; cursor: pointer;
+    }
+    .seg button[aria-pressed="true"] { background: #ffffff; color: var(--primary-dark); }
+
+    select, input {
+      font: inherit; color: var(--ink); background: #fff;
+      border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 12px; width: 100%;
+    }
+    .btn {
+      border: 0; background: var(--primary); color: #fff; font: 700 0.86rem var(--f-sans);
+      padding: 9px 16px; border-radius: 9px; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn.orange { background: var(--accent-orange); }
+    .btn.ghost { background: var(--primary-light); color: var(--primary-dark); }
+    .btn.top-link { background: rgba(255,255,255,0.16); color: #fff; font-size: 0.8rem; padding: 7px 12px; }
+    .btn.top-link:hover { background: rgba(255,255,255,0.28); }
+    .btn.sm { padding: 6px 12px; font-size: 0.8rem; width: auto; }
+
+    .grid2 { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 22px; }
+    @media (max-width: 960px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--primary);
+      border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow);
+    }
+    .kpi b { display: block; font: 800 1.7rem var(--f-sans); color: var(--primary-dark); }
+    .kpi span { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 22px; box-shadow: var(--shadow); }
+    .panel h2 { font-size: 1.08rem; font-weight: 800; margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; }
+    .field { margin-bottom: 12px; }
+    .label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; display: block; }
+
+    .tbl { overflow-x: auto; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+    th { position: sticky; top: 0; background: var(--sunken); font: 800 0.72rem var(--f-sans); text-transform: uppercase; color: var(--muted); z-index: 2; }
+
+    .bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+    .bar-bg { flex: 1; height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .bar-fill { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
+
+    .pill { display: inline-block; font: 700 0.71rem var(--f-sans); text-transform: uppercase; padding: 4px 10px; border-radius: 99px; }
+    .p-vend { background: var(--ok-soft); color: var(--ok-ink); }
+    .p-warn { background: var(--warn-soft); color: var(--warn-ink); }
+    .p-excl { background: var(--bad-soft); color: var(--bad-ink); }
+    .p-asig { background: var(--primary-light); color: var(--primary-dark); }
+
+    .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 12px; font-weight: 600; z-index: 99; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header class="hero-bar">
+  <div class="wrap hero-inner">
+    <div class="brand">
+      <div class="brand-icon">👑</div>
+      <h1>QuicklanCRM · Administrador</h1>
+      <span class="tag">ACCESO TOTAL · {{ nombre or usuario }}</span>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group">
+        <button id="tUsuarios" aria-pressed="true" type="button">👥 Usuarios</button>
+        <button id="tVentas" aria-pressed="false" type="button">🔥 Bandeja Ventas</button>
+        <button id="tBase" aria-pressed="false" type="button">📊 Base de Datos y Avance</button>
+      </div>
+      <!-- Accesos directos a todos los visores de la plataforma -->
+      <a href="/campo" class="btn top-link">📞 Ir a Visor Campo (Azul)</a>
+      <a href="/backoffice" class="btn top-link">⚡ Ir a Visor Back Office (Naranja)</a>
+      <a href="/postventa" class="btn top-link">🛠️ Visor Postventa</a>
+      <a href="/logout" class="btn top-link" style="background:rgba(239,68,68,0.75);">Salir</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ==================== PESTAÑA 1: CREAR Y GESTIONAR USUARIOS ==================== -->
+  <main id="secUsuarios">
+    <div class="grid2">
+      <section class="panel">
+        <h2>➕ Crear Nuevo Usuario</h2>
+        <form id="formCrearUsuario">
+          <div class="field">
+            <label class="label">Nombre Completo (Ej. JUAN PEREZ)</label>
+            <input type="text" name="nombre_completo" required placeholder="Nombre del colaborador">
+          </div>
+          <div class="field">
+            <label class="label">Usuario de Login (Ej. jperez)</label>
+            <input type="text" name="usuario" required placeholder="Usuario sin espacios">
+          </div>
+          <div class="field">
+            <label class="label">Contraseña (Password)</label>
+            <input type="text" name="password" required placeholder="Ej. juan123">
+          </div>
+          <div class="field">
+            <label class="label">Rol en la Plataforma</label>
+            <select name="rol" required>
+              <option value="VENTAS">VENTAS (Visor Azul de Campo)</option>
+              <option value="BACKOFFICE">BACKOFFICE (Visor Naranja)</option>
+              <option value="POSTVENTA">POSTVENTA</option>
+              <option value="ADMIN">ADMIN (Control Total)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label">Estado Inicial</label>
+            <select name="estado">
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+          </div>
+          <button type="submit" class="btn" id="btnCrearUser" style="width:100%;margin-top:6px;">➕ Guardar en Hoja Usuarios</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>
+          <span>👥 Usuarios Registrados en Plataforma</span>
+          <small id="totalUsuariosLbl">Cargando...</small>
+        </h2>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr>
+                <th>ID_USUARIO</th>
+                <th>NOMBRE_COMPLETO</th>
+                <th>USUARIO</th>
+                <th>PASSWORD (Editable)</th>
+                <th>ROL</th>
+                <th>ESTADO</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyUsuarios"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ==================== PESTAÑA 2: BANDEJA DE VENTAS ==================== -->
+  <main id="secVentas" hidden>
+    <div class="kpis" id="kpiVentas"></div>
+    <section class="panel">
+      <h2>
+        <span>🔥 Bandeja General de Ventas</span>
+        <small id="contadorVentas">0 ventas</small>
+      </h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Ejecutivo</th>
+              <th>Origen</th>
+              <th>DNI / RUC</th>
+              <th>Cliente</th>
+              <th>Celular</th>
+              <th>Distrito / Dirección</th>
+              <th>Plan</th>
+              <th>Estado Back Office</th>
+              <th>Comentario</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyVentas"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== PESTAÑA 3: BASE DE DATOS Y AVANCE EJECUTIVOS ==================== -->
+  <main id="secBase" hidden>
+    <div class="kpis" id="kpiBase"></div>
+
+    <section class="panel">
+      <h2>📈 Cuánto van Gestionando los Ejecutivos de Ventas</h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Ejecutivo</th>
+              <th>Usuario</th>
+              <th>Avance de Cupo</th>
+              <th>Asignado Ahora</th>
+              <th>En Gestión</th>
+              <th>Agendados</th>
+              <th>No Efectivos</th>
+              <th>Ventas Base</th>
+              <th>Total Ventas</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyResumenAsesores"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>📂 Todos los Registros de BASE DE DATOS</h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>RUC</th>
+              <th>Razón Social</th>
+              <th>DNI</th>
+              <th>Contacto</th>
+              <th>Distrito</th>
+              <th>Celular</th>
+              <th>Estado</th>
+              <th>Asignado a</th>
+              <th>Últ. Tipificación</th>
+              <th>Guardar</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyBase"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+let listaUsuarios = [];
+let listaVentas = [];
+let listaBase = [];
+let listaEjecutivos = [];
+let cupoDiario = 40;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.hidden = true, 3000);
+}
+
+async function cargarTodoAdmin() {
+  try {
+    const res = await fetch("/api/backoffice/datos");
+    const data = await res.json();
+    if (!data.ok) return toast(data.msg);
+
+    listaUsuarios = data.usuarios || [];
+    listaVentas = data.ventas || [];
+    listaBase = data.base || [];
+    listaEjecutivos = data.ejecutivos || [];
+    cupoDiario = data.cupo_max || 40;
+
+    renderUsuarios();
+    renderVentas();
+    renderBase();
+  } catch (err) {
+    toast("Error cargando datos del servidor.");
+  }
+}
+
+function renderUsuarios() {
+  $("totalUsuariosLbl").textContent = `${listaUsuarios.length} usuarios`;
+  const roles = ["ADMIN", "BACKOFFICE", "POSTVENTA", "VENTAS"];
+
+  $("tbodyUsuarios").innerHTML = listaUsuarios.map(u => {
+    const f = u._fila;
+    const rolActual = String(u.ROL || "VENTAS").toUpperCase();
+    const estActual = String(u.ESTADO || "Activo");
+    return `
+      <tr>
+        <td class="mono"><b>${esc(u.ID_USUARIO)}</b></td>
+        <td><b>${esc(u.NOMBRE_COMPLETO)}</b></td>
+        <td class="mono">${esc(u.USUARIO)}</td>
+        <td><input type="text" id="uPass_${f}" value="${esc(u.PASSWORD)}" style="width:120px;"></td>
+        <td>
+          <select id="uRol_${f}" style="width:140px;">
+            ${roles.map(r => `<option value="${r}" ${rolActual === r ? "selected" : ""}>${r}</option>`).join("")}
+          </select>
+        </td>
+        <td>
+          <select id="uEst_${f}" style="width:110px;">
+            <option value="Activo" ${estActual.toLowerCase() === "activo" ? "selected" : ""}>Activo</option>
+            <option value="Inactivo" ${estActual.toLowerCase() !== "activo" ? "selected" : ""}>Inactivo</option>
+          </select>
+        </td>
+        <td>
+          <button type="button" class="btn sm" onclick="actualizarUsuario(${f})">Guardar</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+$("formCrearUsuario").onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = $("btnCrearUser");
+  btn.disabled = true;
+  const payload = Object.fromEntries(new FormData(e.target).entries());
+
+  try {
+    const res = await fetch("/api/admin/crear_usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    toast(data.msg);
+    if (data.ok) {
+      e.target.reset();
+      await cargarTodoAdmin();
+    }
+  } catch (err) {
+    toast("Error al crear usuario.");
+  }
+  btn.disabled = false;
+};
+
+async function actualizarUsuario(fila) {
+  const password = $(`uPass_${fila}`).value;
+  const rol = $(`uRol_${fila}`).value;
+  const estado = $(`uEst_${fila}`).value;
+
+  const res = await fetch("/api/admin/actualizar_usuario", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fila, password, rol, estado })
+  });
+  const data = await res.json();
+  toast(data.msg);
+  if (data.ok) cargarTodoAdmin();
+}
+
+function renderVentas() {
+  const estadosVenta = ["PENDIENTE VALIDACIÓN", "APROBADO", "EN INSTALACIÓN", "INSTALADO / ACTIVADO", "OBSERVADO", "RECHAZADO"];
+  $("kpiVentas").innerHTML = estadosVenta.map(st => {
+    const cant = listaVentas.filter(v => String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase() === st).length;
+    return `<div class="kpi"><b>${cant}</b><span>${st}</span></div>`;
+  }).join("");
+
+  $("contadorVentas").textContent = `${listaVentas.length} ventas`;
+  $("tbodyVentas").innerHTML = listaVentas.map(v => {
+    const f = v._fila;
+    const estActual = String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase();
+    const origen = v.ORIGEN_BASE_ID || "MANUAL";
+    return `
+      <tr>
+        <td class="mono"><b>${esc(v.ID_VENTA)}</b></td>
+        <td class="mono">${esc(v.FECHA)}</td>
+        <td><b>${esc(v.ASESOR)}</b></td>
+        <td><span class="pill p-asig">${esc(origen)}</span></td>
+        <td class="mono">${esc(v.DNI_RUC)}</td>
+        <td><b>${esc(v.CLIENTE)}</b></td>
+        <td class="mono">${esc(v.CELULAR)}</td>
+        <td>${esc(v.DISTRITO)}</td>
+        <td><span class="pill p-vend">${esc(v.PLAN)}</span></td>
+        <td>
+          <select id="estVenta_${f}" style="width:185px;">
+            ${estadosVenta.map(st => `<option value="${st}" ${estActual === st ? "selected" : ""}>${st}</option>`).join("")}
+          </select>
+        </td>
+        <td><input type="text" id="comVenta_${f}" value="${esc(v.COMENTARIO_BACK || "")}" style="width:160px;"></td>
+        <td><button type="button" class="btn orange sm" onclick="guardarVentaAdmin(${f}, '${esc(origen)}')">Guardar</button></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function guardarVentaAdmin(fila, origen) {
+  const estado = $(`estVenta_${fila}`).value;
+  const comentario_back = $(`comVenta_${fila}`).value;
+  const res = await fetch("/api/backoffice/actualizar_venta", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fila, estado, comentario_back, origen_base_id: origen })
+  });
+  const data = await res.json();
+  toast(data.msg);
+  if (data.ok) cargarTodoAdmin();
+}
+
+function renderBase() {
+  const estadosBase = ["LIBRE", "ASIGNADO", "EN GESTIÓN", "AGENDADO", "VENDIDO", "EXCLUIDO", "BLOQUEADO"];
+  $("kpiBase").innerHTML = estadosBase.map(k => {
+    const cant = listaBase.filter(r => String(r.ESTADO || "LIBRE").toUpperCase() === k).length;
+    return `<div class="kpi"><b>${cant}</b><span>${k}</span></div>`;
+  }).join("");
+
+  $("tbodyResumenAsesores").innerHTML = listaEjecutivos.map(e => {
+    const pct = Math.min(100, Math.round((e.gestionados_total / cupoDiario) * 100));
+    return `
+      <tr>
+        <td><b>${esc(e.nombre)}</b></td>
+        <td class="mono">${esc(e.usuario)}</td>
+        <td>
+          <div class="bar-wrap">
+            <span class="mono"><b>${e.gestionados_total}</b>/${cupoDiario}</span>
+            <div class="bar-bg"><i class="bar-fill" style="width:${pct}%"></i></div>
+          </div>
+        </td>
+        <td class="mono">${e.asignados_ahora}</td>
+        <td class="mono">${e.en_gestion}</td>
+        <td class="mono">${e.agendados}</td>
+        <td class="mono">${e.no_efectivos}</td>
+        <td class="mono"><span class="pill p-vend">${e.ventas_base}</span></td>
+        <td class="mono"><b>${e.ventas_totales}</b></td>
+      </tr>
+    `;
+  }).join("");
+
+  $("tbodyBase").innerHTML = listaBase.map(r => {
+    const f = r._fila;
+    const stActual = String(r.ESTADO || "LIBRE").toUpperCase();
+    return `
+      <tr>
+        <td class="mono"><b>${esc(r.ID)}</b></td>
+        <td class="mono">${esc(r.RUC || "—")}</td>
+        <td><b>${esc(r.RAZON_SOCIAL || "—")}</b></td>
+        <td class="mono">${esc(r.DNI || "—")}</td>
+        <td>${esc(r.NOMBRE || "—")}</td>
+        <td>${esc(r.DISTRITO || "—")}</td>
+        <td class="mono">${esc(r.CELULAR || "—")}</td>
+        <td>
+          <select id="estBase_${f}" style="width:135px;">
+            ${estadosBase.map(op => `<option value="${op}" ${stActual === op ? "selected" : ""}>${op}</option>`).join("")}
+          </select>
+        </td>
+        <td><input type="text" id="asigBase_${f}" value="${esc(r.ASIGNADO_A || "")}" style="width:130px;"></td>
+        <td>${esc(r.ULT_TIPIFICACION || "—")}</td>
+        <td><button type="button" class="btn ghost sm" onclick="guardarBaseAdmin(${f})">Guardar</button></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function guardarBaseAdmin(fila) {
+  const estado = $(`estBase_${fila}`).value;
+  const asignado_a = $(`asigBase_${fila}`).value;
+  const res = await fetch("/api/backoffice/actualizar_base", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fila, estado, asignado_a })
+  });
+  const data = await res.json();
+  toast(data.msg);
+  if (data.ok) cargarTodoAdmin();
+}
+
+function activarTab(idBtn, idSec) {
+  ["tUsuarios", "tVentas", "tBase"].forEach(b => $(b).setAttribute("aria-pressed", b === idBtn));
+  ["secUsuarios", "secVentas", "secBase"].forEach(s => $(s).hidden = s !== idSec);
+}
+$("tUsuarios").onclick = () => activarTab("tUsuarios", "secUsuarios");
+$("tVentas").onclick = () => activarTab("tVentas", "secVentas");
+$("tBase").onclick = () => activarTab("tBase", "secBase");
+
+document.addEventListener("DOMContentLoaded", cargarTodoAdmin);
+</script>
+</body>
+</html>

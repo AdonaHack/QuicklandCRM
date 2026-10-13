@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quickland CRM - Panel Post-Venta</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
+
+  <nav class="bg-teal-900 text-white px-6 py-4 flex justify-between items-center shadow-lg">
+    <div class="flex items-center space-x-3">
+      <div class="bg-teal-600 p-2 rounded-xl">
+        <i class="fa-solid fa-receipt text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-black text-lg tracking-wide">Quickland CRM</h1>
+        <p class="text-[11px] text-teal-200">Módulo Post-Venta, Pagos y Liquidación de Comisiones</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3">
+      <span class="text-xs text-teal-200">Hola, <strong>{{ nombre or usuario }}</strong></span>
+      <a href="/logout" class="bg-rose-600 hover:bg-rose-700 text-xs px-3 py-1.5 rounded-lg font-bold transition">Salir</a>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto p-6 space-y-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="font-bold text-sm text-slate-700">Seguimiento de Recibos y Comisiones a Asesores</h3>
+        <button onclick="cargarVentas()" class="text-xs text-teal-600 font-bold hover:underline flex items-center">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Actualizar
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-100">
+            <tr>
+              <th class="py-3 px-4">ID Venta</th>
+              <th class="py-3 px-4">Cliente</th>
+              <th class="py-3 px-4">Asesor</th>
+              <th class="py-3 px-4">Instalación</th>
+              <th class="py-3 px-4">N° Recibo</th>
+              <th class="py-3 px-4">Pago Cliente</th>
+              <th class="py-3 px-4">Comisión Asesor</th>
+              <th class="py-3 px-4 text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tablaPostventa" class="divide-y divide-slate-100">
+            <!-- Dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL DE POST-VENTA -->
+  <div id="modalPV" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-base text-slate-800">Liquidación y Cobro</h3>
+        <button onclick="cerrarModal()" class="text-slate-400 text-lg">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="bg-slate-50 p-3 rounded-xl space-y-1">
+          <p><strong>Cliente:</strong> <span id="pvCliente"></span></p>
+          <p><strong>Asesor:</strong> <span id="pvAsesor"></span></p>
+          <p><strong>Plan:</strong> <span id="pvPlan"></span> • Comisión: <strong>S/ <span id="pvComision"></span></strong></p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-600 mb-1">N° de Recibo / Código de Pago</label>
+          <input type="text" id="pvRecibo" placeholder="REC-98213" class="w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Vencimiento Recibo</label>
+            <input type="date" id="pvVencimiento" class="w-full border rounded-lg p-2">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Estado Pago Cliente</label>
+            <select id="pvEstadoPago" class="w-full border rounded-lg p-2">
+              <option value="Pendiente">Pendiente</option>
+              <option value="Pagado">Pagado</option>
+              <option value="Vencido">Vencido</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="border-t pt-3 space-y-2">
+          <h4 class="font-bold text-slate-700">Estado de Comisión al Asesor</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1">Estado Comisión</label>
+              <select id="pvEstadoComision" class="w-full border rounded-lg p-2 font-bold text-teal-700">
+                <option value="Pendiente instalación">Pendiente instalación</option>
+                <option value="Por liquidar">Por liquidar</option>
+                <option value="Comisionado">Comisionado (Aprobado)</option>
+                <option value="No comisiona">No comisiona</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1">Fecha Pago Comisión</label>
+              <input type="date" id="pvFechaPagoComision" class="w-full border rounded-lg p-2">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t">
+        <button onclick="cerrarModal()" class="px-4 py-2 text-slate-500 font-semibold text-xs">Cancelar</button>
+        <button onclick="guardarPostVenta()" id="btnGuardarPV" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ventasPV = [];
+    let ventaActual = null;
+
+    async function cargarVentas() {
+      const tbody = document.getElementById('tablaPostventa');
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando...</td></tr>';
+      try {
+        const res = await fetch('/api/ventas');
+        const data = await res.json();
+        if (data.status === 'success') {
+          ventasPV = data.data.reverse();
+          renderizar();
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">Error al cargar datos</td></tr>';
+      }
+    }
+
+    function renderizar() {
+      const tbody = document.getElementById('tablaPostventa');
+      tbody.innerHTML = ventasPV.map(v => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4 font-mono font-bold text-slate-500">${v.ID_VENTA}</td>
+          <td class="py-3 px-4 font-bold text-slate-800">${v.CLIENTE_NOMBRE}</td>
+          <td class="py-3 px-4 text-slate-600">${v.ASESOR_CAMPO}</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.ESTADO_INSTALACION === 'Instalado' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100'}">
+              ${v.ESTADO_INSTALACION || 'Pendiente'}
+            </span>
+          </td>
+          <td class="py-3 px-4 font-mono">${v.NUMERO_RECIBO_CLIENTE || '-'}</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.ESTADO_PAGO_CLIENTE === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+              ${v.ESTADO_PAGO_CLIENTE || 'Pendiente'}
+            </span>
+          </td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.ESTADO_COMISION === 'Comisionado' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}">
+              ${v.ESTADO_COMISION || 'Pendiente'}
+            </span>
+            <div class="text-[10px] text-slate-400">S/ ${v.MONTO_COMISION || 0}</div>
+          </td>
+          <td class="py-3 px-4 text-center">
+            <button onclick='abrirModal(${JSON.stringify(v)})' class="bg-teal-50 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1 rounded-lg font-bold text-[11px] transition">
+              Liquidar
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function abrirModal(v) {
+      ventaActual = v;
+      document.getElementById('pvCliente').innerText = v.CLIENTE_NOMBRE;
+      document.getElementById('pvAsesor').innerText = v.ASESOR_CAMPO;
+      document.getElementById('pvPlan').innerText = v.PLAN_PRODUCTO;
+      document.getElementById('pvComision').innerText = v.MONTO_COMISION || 0;
+
+      document.getElementById('pvRecibo').value = v.NUMERO_RECIBO_CLIENTE || '';
+      document.getElementById('pvVencimiento').value = v.FECHA_VENCIMIENTO_RECIBO || '';
+      document.getElementById('pvEstadoPago').value = v.ESTADO_PAGO_CLIENTE || 'Pendiente';
+      document.getElementById('pvEstadoComision').value = v.ESTADO_COMISION || 'Pendiente instalación';
+      document.getElementById('pvFechaPagoComision').value = v.FECHA_PAGO_COMISION || '';
+
+      document.getElementById('modalPV').classList.remove('hidden');
+    }
+
+    function cerrarModal() {
+      document.getElementById('modalPV').classList.add('hidden');
+      ventaActual = null;
+    }
+
+    async function guardarPostVenta() {
+      if (!ventaActual) return;
+      const btn = document.getElementById('btnGuardarPV');
+      btn.disabled = true;
+      btn.innerText = 'Guardando...';
+
+      const payload = {
+        numero_recibo: document.getElementById('pvRecibo').value,
+        fecha_vencimiento_recibo: document.getElementById('pvVencimiento').value,
+        estado_pago_cliente: document.getElementById('pvEstadoPago').value,
+        estado_comision: document.getElementById('pvEstadoComision').value,
+        fecha_pago_comision: document.getElementById('pvFechaPagoComision').value
+      };
+
+      try {
+        const res = await fetch(`/api/ventas/${ventaActual.ID_VENTA}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          cerrarModal();
+          cargarVentas();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      } catch (e) {
+        alert('Error de conexión');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Guardar Cambios';
+      }
+    }
+
+    cargarVentas();
+  </script>
+</body>
+</html>
