@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Quickland CRM · Panel de Asesor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --sunken: #f8fafc;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+
+      --primary: #1d5dec;
+      --primary-dark: #1545b8;
+      --primary-light: #eff6ff;
+      --primary-glow: rgba(29, 93, 236, 0.2);
+
+      --ok: #16a34a; --ok-soft: #dcfce7; --ok-ink: #166534;
+      --warn: #d97706; --warn-soft: #fef3c7; --warn-ink: #92400e;
+      --bad: #dc2626; --bad-soft: #fee2e2; --bad-ink: #991b1b;
+
+      --f-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+      --f-mono: "JetBrains Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--f-sans);
+      font-size: 14.5px;
+      line-height: 1.5;
+      padding-bottom: 60px;
+    }
+    .mono { font-family: var(--f-mono); }
+
+    header.topbar {
+      background: var(--primary);
+      color: #fff;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 14px rgba(29, 93, 236, 0.25);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    .brand-box { display: flex; align-items: center; gap: 12px; }
+    .brand-logo {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(255,255,255,0.18);
+      display: grid; place-items: center; font-size: 1.15rem;
+    }
+    .brand-title { font-size: 1.15rem; font-weight: 800; margin: 0; line-height: 1.15; }
+    .brand-sub { font-size: 0.78rem; opacity: 0.9; font-weight: 600; }
+    .btn-salir {
+      background: rgba(255,255,255,0.18); color: #fff; text-decoration: none;
+      padding: 7px 14px; border-radius: 8px; font-weight: 700; font-size: 0.84rem;
+      transition: background 0.15s;
+    }
+    .btn-salir:hover { background: rgba(220, 38, 38, 0.85); }
+
+    .main-container {
+      max-width: 680px;
+      margin: 26px auto 0;
+      padding: 0 16px;
+    }
+    .main-container.wide-mode {
+      max-width: 1120px;
+    }
+
+    .top-kpis {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px 22px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+    }
+    .kpi-card .k-title {
+      font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px;
+    }
+    .kpi-card .k-num {
+      font-size: 1.75rem; font-weight: 800; line-height: 1.15; margin-bottom: 2px;
+    }
+    .kpi-card .k-num.green { color: var(--ok); }
+    .kpi-card .k-num.blue { color: var(--primary); }
+    .kpi-card .k-sub { font-size: 0.76rem; color: var(--muted); }
+
+    .tabs-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      background: #e2e8f0;
+      padding: 5px;
+      border-radius: 14px;
+      margin-bottom: 22px;
+      gap: 5px;
+    }
+    .tab-btn {
+      border: 0;
+      background: transparent;
+      color: #475569;
+      font: 700 0.9rem var(--f-sans);
+      padding: 11px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.18s ease;
+    }
+    .tab-btn[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .card-panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 26px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 540px) {
+      .form-row2, .top-kpis, .tabs-bar { grid-template-columns: 1fr; }
+    }
+    .f-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    input, select, textarea {
+      width: 100%;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 11px 14px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    input[readonly] {
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 700;
+    }
+    textarea { min-height: 85px; resize: vertical; }
+
+    .file-box {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #fff;
+    }
+    .file-box input[type="file"] {
+      border: 0; padding: 0; font-size: 0.86rem;
+    }
+    .file-box input[type="file"]::file-selector-button {
+      background: #eff6ff;
+      color: var(--primary);
+      border: 0;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-right: 12px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+      font: 700 0.98rem var(--f-sans);
+      padding: 14px 20px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 6px 18px rgba(29, 93, 236, 0.28);
+      transition: background 0.15s, transform 0.15s;
+    }
+    .btn-submit:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .grid-base { display: grid; grid-template-columns: 1.2fr 0.95fr; gap: 20px; }
+    @media (max-width: 860px) { .grid-base { grid-template-columns: 1fr; } }
+    .reg-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 12px 16px; padding: 16px; background: #f8fafc;
+      border: 1px solid #dbeafe; border-radius: 12px; margin-bottom: 16px;
+    }
+    .reg-grid .lbl { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+    .reg-grid .val { font-size: 0.98rem; font-weight: 700; color: var(--ink); }
+    .reg-grid .wide { grid-column: 1 / -1; }
+
+    .chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .chip {
+      border: 1.5px solid var(--line); background: #f8fafc; color: var(--ink);
+      font: 700 0.88rem var(--f-sans); padding: 10px; border-radius: 10px; cursor: pointer;
+    }
+    .chip[aria-pressed="true"].efe { background: var(--ok-soft); border-color: var(--ok); color: var(--ok-ink); }
+    .chip[aria-pressed="true"].noe { background: var(--bad-soft); border-color: var(--bad); color: var(--bad-ink); }
+
+    .subs { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+    .sub {
+      border: 1.5px solid var(--line); background: #fff; color: var(--ink);
+      font: 600 0.84rem var(--f-sans); padding: 7px 13px; border-radius: 99px; cursor: pointer;
+    }
+    .sub[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .rule {
+      font-size: 0.84rem; font-weight: 600; color: var(--primary-dark);
+      background: var(--primary-light); border-left: 4px solid var(--primary);
+      padding: 9px 12px; border-radius: 8px; margin-bottom: 14px;
+    }
+
+    .pill {
+      display: inline-block; font: 700 0.71rem var(--f-sans); text-transform: uppercase;
+      padding: 3px 9px; border-radius: 99px;
+    }
+    .p-vend { background: var(--ok-soft); color: var(--ok-ink); }
+    .p-gest { background: var(--warn-soft); color: var(--warn-ink); }
+    .p-excl { background: var(--bad-soft); color: var(--bad-ink); }
+    .p-asig { background: var(--primary-light); color: var(--primary-dark); }
+
+    .cupo-bar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .bar-bg { flex: 1; height: 9px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .bar-fill { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
+
+    .cuenta-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+      margin-bottom: 8px; background: #f8fafc;
+    }
+
+    .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { background: #f8fafc; font-size: 0.73rem; text-transform: uppercase; color: var(--muted); }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 10px;
+      font-weight: 600; z-index: 99;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand-box">
+    <div class="brand-logo">📡</div>
+    <div>
+      <div class="brand-title">Quickland CRM</div>
+      <div class="brand-sub" id="nombreAsesorHeader">Asesor: Ejecutivo Comercial</div>
+    </div>
+  </div>
+  <a href="/logout" class="btn-salir">Salir</a>
+</header>
+
+<div class="main-container" id="mainWrap">
+  <!-- KPIs Superiores limpios (calculados por JS) -->
+  <div class="top-kpis">
+    <div class="kpi-card">
+      <div class="k-title">VENTAS EXITOSAS</div>
+      <div class="k-num green" id="kpiExitosas">0</div>
+      <div class="k-sub">Instaladas al 100%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k-title">COMISIÓN POR COBRAR</div>
+      <div class="k-num blue" id="kpiComision">S/ 0.00</div>
+      <div class="k-sub">Pendiente de fecha</div>
+    </div>
+  </div>
+
+  <!-- Barra de 3 Pestañas: Nueva Venta | Base de Datos | Mis Ventas -->
+  <div class="tabs-bar" role="tablist">
+    <button type="button" class="tab-btn" id="btnTabNueva" aria-selected="true">
+      <span>⊕</span> Nueva Venta
+    </button>
+    <button type="button" class="tab-btn" id="btnTabBase" aria-selected="false">
+      <span>📞</span> Base de Datos
+    </button>
+    <button type="button" class="tab-btn" id="btnTabMisVentas" aria-selected="false">
+      <span>☰</span> <span id="lblMisVentasCount">Mis Ventas (0)</span>
+    </button>
+  </div>
+
+  <!-- ==================== PESTAÑA 1: NUEVA VENTA EXTERNA ==================== -->
+  <section id="secNuevaVenta" class="card-panel">
+    <form id="formNuevaVenta">
+      <div class="form-group">
+        <label class="f-label">Nombre Completo del Cliente</label>
+        <input type="text" id="v_cliente" name="cliente" required placeholder="Ej. Juan Gómez Salazar">
+      </div>
+
+      <div class="form-row2">
+        <div>
+          <label class="f-label">DNI / Documento</label>
+          <input type="text" id="v_dni_ruc" name="dni_ruc" required placeholder="8 dígitos o RUC">
+        </div>
+        <div>
+          <label class="f-label">Teléfono Móvil</label>
+          <input type="tel" id="v_celular" name="celular" required placeholder="987654321">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="f-label">Dirección y Distrito</label>
+        <input type="text" id="v_direccion_distrito" name="direccion_distrito" required placeholder="Av. Principal 123, Dpto 4, Distrito">
+      </div>
+
+      <div class="form-row2">
+        <div>
+          <label class="f-label">Plan / Producto</label>
+          <select id="v_plan" name="plan" required onchange="actualizarPrecioPlan()">
+            <option value="" data-precio="0">Selecciona...</option>
+            <option value="Plan 300 Mbps - S/ 59" data-precio="59">Plan 300 Mbps</option>
+            <option value="Plan 600 Mbps - S/ 69" data-precio="69">Plan 600 Mbps</option>
+          </select>
+        </div>
+        <div>
+          <label class="f-label">Precio Plan (S/)</label>
+          <input type="text" id="v_precio" name="precio" readonly value="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="f-label">Documentos (DNI frontal/reverso, recibo) - Máx 4.</label>
+        <div class="file-box">
+          <input type="file" id="v_archivos" multiple accept="image/*,.pdf">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="f-label">Observaciones para Back Office</label>
+        <textarea id="v_observaciones" name="observaciones" placeholder="Llamar en las tardes, portón azul..."></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btnGuardarVenta">
+        <span>🚀</span> Subir Venta
+      </button>
+    </form>
+  </section>
+
+  <!-- ==================== PESTAÑA 2: BASE DE DATOS ==================== -->
+  <section id="secBaseDatos" hidden>
+    <div class="grid-base">
+      <div class="card-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <h3 style="margin:0;font-size:1.05rem;" id="tituloPanelReg">Registro asignado</h3>
+          <span class="mono" id="idRegLabel" style="color:var(--muted);font-weight:700;"></span>
+        </div>
+        <div id="contenedorRegistro">
+          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
+            <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
+            <button type="button" class="btn-submit" onclick="solicitarRegistro()" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div class="card-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <b style="font-size:0.95rem;">Mi Meta Diaria de Base</b>
+            <span class="mono" id="cupoTexto" style="color:var(--primary);font-weight:800;">0/40</span>
+          </div>
+          <div class="cupo-bar">
+            <div class="bar-bg"><i class="bar-fill" id="cupoBarra" style="width:0%"></i></div>
+            <span style="font-size:0.8rem;color:var(--muted);">cupo</span>
+          </div>
+          <p id="resumenHoy" style="font-size:0.82rem;color:var(--muted);margin:8px 0 0;">0 cuentas activas en seguimiento</p>
+        </div>
+
+        <div class="card-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <b style="font-size:0.95rem;">Mis Cuentas en Cartera</b>
+            <small id="totalMisCuentas" style="color:var(--muted);font-weight:700;">0 activas</small>
+          </div>
+          <div id="contenedorMisCuentas">
+            <p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PESTAÑA 3: MIS VENTAS ==================== -->
+  <section id="secMisVentas" class="card-panel" hidden>
+    <h3 style="margin:0 0 14px;font-size:1.05rem;">Historial y Estado de Mis Ventas</h3>
+    <div id="contenedorTablaMisVentas">
+      <p style="text-align:center;color:var(--muted);padding:24px 0;margin:0;">Aún no tienes ventas registradas.</p>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.hidden = true, 3000);
+}
+
+function actualizarPrecioPlan() {
+  const sel = $("v_plan");
+  const opt = sel.options[sel.selectedIndex];
+  $("v_precio").value = opt ? (opt.getAttribute("data-precio") || "0") : "0";
+}
+
+function activarPestana(cual) {
+  const esNueva = cual === "nueva";
+  const esBase = cual === "base";
+  const esVentas = cual === "ventas";
+
+  $("btnTabNueva").setAttribute("aria-selected", esNueva);
+  $("btnTabBase").setAttribute("aria-selected", esBase);
+  $("btnTabMisVentas").setAttribute("aria-selected", esVentas);
+
+  $("secNuevaVenta").hidden = !esNueva;
+  $("secBaseDatos").hidden = !esBase;
+  $("secMisVentas").hidden = !esVentas;
+
+  $("mainWrap").classList.toggle("wide-mode", !esNueva);
+}
+
+$("btnTabNueva").onclick = () => activarPestana("nueva");
+$("btnTabBase").onclick = () => activarPestana("base");
+$("btnTabMisVentas").onclick = () => activarPestana("ventas");
+
+$("formNuevaVenta").onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = $("btnGuardarVenta");
+  btn.disabled = true;
+  btn.textContent = "Subiendo Venta...";
+
+  const dirDistrito = $("v_direccion_distrito").value.trim();
+  const payload = {
+    cliente: $("v_cliente").value.trim(),
+    dni_ruc: $("v_dni_ruc").value.trim(),
+    celular: $("v_celular").value.trim(),
+    distrito: dirDistrito,
+    direccion: dirDistrito,
+    plan: $("v_plan").value,
+    observaciones: $("v_observaciones").value.trim(),
+    origen_base_id: "EXTERNA"
+  };
+
+  try {
+    const res = await fetch("/api/campo/registrar_venta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast("✅ Venta subida y enviada a Back Office");
+      e.target.reset();
+      $("v_precio").value = "0";
+      await cargarTodoCampo();
+      activarPestana("ventas");
+    } else {
+      toast(data.msg || "Error al subir venta");
+    }
+  } catch (err) {
+    toast("Error de conexión al subir la venta");
+  }
+  btn.disabled = false;
+  btn.innerHTML = "<span>🚀</span> Subir Venta";
+};
+
+const TIPIF = {
+  "CONTACTO EFECTIVO": [
+    "Interesado en propuesta",
+    "Se envía propuesta",
+    "Venta Plan 300 Mbps (S/ 59)",
+    "Venta Plan 600 Mbps (S/ 69)",
+    "Cl indica llamar nuevamente"
+  ],
+  "CONTACTO NO EFECTIVO": ["No contesta", "No desea", "Sin contacto", "Corta llamada", "Cliente crítico"]
+};
+const REGLA = {
+  "Interesado en propuesta": "📌 Se queda en tus cuentas activas durante 30 días.",
+  "Se envía propuesta": "📌 Se queda en tus cuentas activas durante 30 días.",
+  "Venta Plan 300 Mbps (S/ 59)": "🎉 ¡Venta de S/ 59! Pasa directo al visor de Back Office.",
+  "Venta Plan 600 Mbps (S/ 69)": "🎉 ¡Venta de S/ 69! Pasa directo al visor de Back Office.",
+  "Cl indica llamar nuevamente": "📅 Se agenda; si no lo gestionas en 7 días vuelve a la base.",
+  "No contesta": "↩️ Sale de tu vista y vuelve a la base en 2 días (máx. 3 intentos).",
+  "Corta llamada": "↩️ Sale de tu vista; se reintenta una vez más.",
+  "Sin contacto": "⚠️ Sale de tu vista; con 2 intentos se marca número inválido.",
+  "No desea": "🚫 Sale de tu vista y se excluye de la base.",
+  "Cliente crítico": "🔒 Sale de tu vista y se bloquea de forma permanente."
+};
+
+let working = null;
+let misCuentas = [];
+let misVentasLista = [];
+let selCont = null;
+let selSub = null;
+let cupoMax = 40;
+let usadosHoy = 0;
+
+function mananaISO() {
+  return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+}
+
+async function cargarTodoCampo() {
+  try {
+    const res = await fetch("/api/campo/mi_base");
+    const data = await res.json();
+    if (!data.ok) return;
+
+    if (data.usuario) {
+      $("nombreAsesorHeader").textContent = `Asesor: ${data.usuario}`;
+    }
+    working = data.asignado;
+    misCuentas = data.mis_cuentas || [];
+    misVentasLista = data.mis_ventas || [];
+    cupoMax = data.cupo_max || 40;
+    usadosHoy = data.usados || 0;
+
+    renderMisVentasKPIs();
+    renderBase();
+  } catch (e) {}
+}
+
+function renderMisVentasKPIs() {
+  $("lblMisVentasCount").textContent = `Mis Ventas (${misVentasLista.length})`;
+
+  let instaladas = 0;
+  let comision = 0;
+
+  misVentasLista.forEach(v => {
+    const est = String(v.ESTADO || v.Estado || "").toUpperCase();
+    if (est.includes("INSTALADO") || est.includes("ACTIVADO")) {
+      instaladas++;
+      const planStr = String(v.PLAN || v.Plan || "");
+      comision += planStr.includes("600") ? 69 : 59;
+    }
+  });
+
+  $("kpiExitosas").textContent = instaladas;
+  $("kpiComision").textContent = `S/ ${comision.toFixed(2)}`;
+
+  const cont = $("contenedorTablaMisVentas");
+  if (!misVentasLista.length) {
+    cont.innerHTML = `<p style="text-align:center;color:var(--muted);padding:24px 0;margin:0;">Aún no tienes ventas registradas.</p>`;
+    return;
+  }
+
+  cont.innerHTML = `
+    <div class="tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>DNI / RUC</th>
+            <th>Plan</th>
+            <th>Estado Back Office</th>
+            <th>Comentario Back</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${misVentasLista.map(v => {
+            const est = String(v.ESTADO || v.Estado || "PENDIENTE VALIDACIÓN").toUpperCase();
+            let cls = "p-asig";
+            if (est.includes("INSTALADO") || est.includes("APROBADO")) cls = "p-vend";
+            else if (est.includes("RECHAZADO")) cls = "p-excl";
+            else if (est.includes("OBSERVADO")) cls = "p-gest";
+            return `
+              <tr>
+                <td class="mono"><b>${esc(v.ID_VENTA || "—")}</b></td>
+                <td class="mono">${esc(v.FECHA || v.Fecha || "—")}</td>
+                <td><b>${esc(v.CLIENTE || v.Cliente || "—")}</b></td>
+                <td class="mono">${esc(v.DNI_RUC || "—")}</td>
+                <td>${esc(v.PLAN || v.Plan || "—")}</td>
+                <td><span class="pill ${cls}">${esc(est)}</span></td>
+                <td style="color:var(--muted);">${esc(v.COMENTARIO_BACK || "—")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function solicitarRegistro() {
+  const btn = $("btnReq");
+  if (btn) { btn.disabled = true; btn.textContent = "Asignando cliente..."; }
+  try {
+    const res = await fetch("/api/campo/solicitar_registro", { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.msg);
+      if (data.registro) { working = data.registro; renderBase(); }
+      else if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
+      return;
+    }
+    working = data.registro;
+    usadosHoy++;
+    selCont = null;
+    selSub = null;
+    renderBase();
+  } catch (err) {
+    toast("No se pudo solicitar el registro.");
+    if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
+  }
+}
+
+async function guardarTipificacion() {
+  if (!working || !selSub) return toast("Selecciona una tipificación.");
+  const obs = $("obs") ? $("obs").value.trim() : "";
+  const agenda = $("agenda") ? $("agenda").value : "";
+  const dirVenta = $("dirVenta") ? $("dirVenta").value.trim() : "";
+
+  if (selSub === "Cl indica llamar nuevamente" && !agenda) {
+    return toast("Indica la fecha para volver a llamar.");
+  }
+
+  let tipifEnvio = selSub;
+  if (selSub.startsWith("Venta")) {
+    tipifEnvio = "Venta Fija";
+  }
+
+  const res = await fetch("/api/campo/tipificar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: working.ID,
+      fila: working._fila,
+      tipificacion: tipifEnvio,
+      plan_elegido: selSub,
+      observaciones: selSub.startsWith("Venta") ? `[${selSub}] ${obs}`.trim() : obs,
+      fecha_agenda: agenda,
+      direccion: dirVenta
+    })
+  });
+  const data = await res.json();
+  if (!data.ok) return toast(data.msg);
+  toast(data.msg);
+  working = null; selCont = null; selSub = null;
+  await cargarTodoCampo();
+}
+
+function renderBase() {
+  $("cupoTexto").textContent = `${usadosHoy}/${cupoMax}`;
+  $("cupoBarra").style.width = `${Math.min(100, (usadosHoy / cupoMax) * 100)}%`;
+  $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
+  $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
+
+  const cont = $("contenedorRegistro");
+  const r = working;
+
+  if (!r) {
+    $("tituloPanelReg").textContent = "Registro asignado";
+    $("idRegLabel").textContent = "";
+    cont.innerHTML = `
+      <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
+        <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
+        <button type="button" class="btn-submit" id="btnReq" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
+      </div>`;
+    $("btnReq").onclick = solicitarRegistro;
+  } else {
+    $("idRegLabel").textContent = r.ID || "";
+    const esVenta = selSub && selSub.startsWith("Venta");
+    cont.innerHTML = `
+      <div class="reg-grid">
+        <div><div class="lbl">RUC / Doc</div><div class="val mono">${esc(r.RUC || "Sin RUC")}</div></div>
+        <div><div class="lbl">DNI</div><div class="val mono">${esc(r.DNI || "—")}</div></div>
+        <div class="wide"><div class="lbl">Razón Social / Cliente</div><div class="val" style="color:var(--primary);">${esc(r.RAZON_SOCIAL && r.RAZON_SOCIAL !== "—" ? r.RAZON_SOCIAL : r.NOMBRE)}</div></div>
+        <div><div class="lbl">Contacto</div><div class="val">${esc(r.NOMBRE || "—")}</div></div>
+        <div><div class="lbl">Distrito</div><div class="val">${esc(r.DISTRITO || "—")}</div></div>
+        <div><div class="lbl">Celular</div><div class="val mono"><a href="tel:${esc(r.CELULAR)}" style="color:var(--primary);text-decoration:none;">📞 ${esc(r.CELULAR || "—")}</a></div></div>
+      </div>
+
+      <label class="f-label">Contactabilidad</label>
+      <div class="chips">
+        ${Object.keys(TIPIF).map((k, i) => `
+          <button type="button" class="chip ${i ? "noe" : "efe"}" aria-pressed="${selCont === k}" data-cont="${k}">
+            ${k === "CONTACTO EFECTIVO" ? "✅ Contacto Efectivo" : "❌ Contacto No Efectivo"}
+          </button>
+        `).join("")}
+      </div>
+
+      ${selCont ? `
+        <label class="f-label">Tipificación</label>
+        <div class="subs">
+          ${TIPIF[selCont].map(s => `<button type="button" class="sub" aria-pressed="${selSub === s}" data-sub="${esc(s)}">${esc(s)}</button>`).join("")}
+        </div>
+      ` : ""}
+
+      ${selSub ? `<div class="rule">${esc(REGLA[selSub])}</div>` : ""}
+
+      ${esVenta ? `
+        <div class="form-group">
+          <label class="f-label">Dirección de Instalación</label>
+          <input type="text" id="dirVenta" placeholder="Av. Principal 123, Distrito">
+        </div>
+      ` : ""}
+
+      ${selSub === "Cl indica llamar nuevamente" ? `
+        <div class="form-group">
+          <label class="f-label">Volver a llamar el</label>
+          <input type="date" id="agenda" value="${r.FECHA_AGENDA || mananaISO()}">
+        </div>
+      ` : ""}
+
+      <div class="form-group">
+        <label class="f-label">Observaciones</label>
+        <textarea id="obs" placeholder="Detalles de la gestión...">${esc(r.MOTIVO_OBSERVACION || "")}</textarea>
+      </div>
+
+      <button type="button" class="btn-submit" id="btnSave">Guardar Tipificación</button>
+    `;
+
+    cont.querySelectorAll("[data-cont]").forEach(b => b.onclick = () => { selCont = b.dataset.cont; selSub = null; renderBase(); });
+    cont.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { selSub = b.dataset.sub; renderBase(); });
+    $("btnSave").onclick = guardarTipificacion;
+  }
+
+  const lista = $("contenedorMisCuentas");
+  if (!misCuentas.length) {
+    lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
+  } else {
+    lista.innerHTML = misCuentas.map(c => `
+      <div class="cuenta-item">
+        <div>
+          <div style="font-weight:700;">${esc(c.RAZON_SOCIAL && c.RAZON_SOCIAL !== "—" ? c.RAZON_SOCIAL : c.NOMBRE)}</div>
+          <div style="font-size:0.8rem;color:var(--muted);">${esc(c.RUC || c.DNI)} · ${esc(c.ULT_TIPIFICACION || "")}</div>
+        </div>
+        <span class="pill p-asig">${esc(c.ESTADO)}</span>
+      </div>
+    `).join("");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", cargarTodoCampo);
+</script>
+</body>
+</html>
