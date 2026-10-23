@@ -385,7 +385,10 @@
           <span class="mono" id="idRegLabel" style="color:var(--muted);font-weight:700;"></span>
         </div>
         <div id="contenedorRegistro">
-          <!-- Aquí se renderiza el cliente o el botón manual -->
+          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
+            <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
+            <button type="button" class="btn-submit" onclick="solicitarRegistro()" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
+          </div>
         </div>
       </div>
 
@@ -619,7 +622,8 @@ function renderMisVentasKPIs() {
     </div>`;
 }
 
-async function solicitarRegistro() {
+// === EL REINTENTO INTELIGENTE ===
+async function solicitarRegistro(intentosLocales = 0) {
   const btn = document.getElementById("btnReqNext") || document.getElementById("btnReq");
   if (btn) { btn.disabled = true; btn.textContent = "Buscando cliente..."; }
   try {
@@ -627,8 +631,15 @@ async function solicitarRegistro() {
     const data = await res.json();
     
     if (!data.ok) {
+      // ⚡ SOLUCIÓN A LA LATENCIA DE GOOGLE SHEETS
+      // Si recibimos el error porque Sheets aún está actualizando, reintentamos de forma invisible
+      if (data.msg.includes("Primero tipifica") && intentosLocales < 3) {
+          if (btn) btn.textContent = "Sincronizando base...";
+          setTimeout(() => solicitarRegistro(intentosLocales + 1), 1500);
+          return;
+      }
+      
       toast(data.msg);
-      // Si dio error por latencia de Google Sheets, habilitamos el botón para que el usuario pueda reintentar manualmente
       if (btn) { btn.disabled = false; btn.textContent = "⚡ Pedir otro cliente (Reintentar)"; }
       return;
     }
@@ -689,8 +700,7 @@ async function guardarTipificacion() {
       if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
       return toast(data.msg);
     }
-    toast(data.msg);
-
+    
     // Registramos el ID guardado para evadir el caché
     justSavedId = working.ID;
     
@@ -704,12 +714,12 @@ async function guardarTipificacion() {
           <div style="border:2px dashed #16a34a;border-radius:14px;padding:32px 16px;text-align:center;background:#f0fdf4;">
             <p style="color:#166534; font-weight:800; font-size:1.15rem; margin-bottom:16px;">✅ ¡Tipificación guardada exitosamente!</p>
             <button type="button" class="btn-submit" id="btnReqNext" onclick="solicitarRegistro()" style="max-width:310px;margin:0 auto;background:#1d5dec;">
-              ⚡ Pedir otro cliente de la Base
+              ⚡ Pedir otro cliente (Reintentar)
             </button>
           </div>`;
     }
 
-    // Actualizamos los números de la barra lateral de fondo (silenciosamente)
+    // Actualizamos los números de la barra lateral
     cargarTodoCampo();
 
   } catch (e) {
@@ -750,7 +760,6 @@ function renderBase() {
   const r = working;
 
   if (!r) {
-    // Si NO hay registro trabajando pero acabamos de guardar, no hacemos nada porque el html del éxito ya se dibujó en guardarTipificacion()
     if (!justSavedId) {
         $("tituloPanelReg").textContent = "Registro asignado";
         $("idRegLabel").textContent = "";
