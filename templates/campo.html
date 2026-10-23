@@ -539,6 +539,7 @@ let selCont = null;
 let selSub = null;
 let cupoMax = 150;
 let usadosHoy = 0;
+let justSavedId = null; // Guardamos el ID que acabamos de tipificar para que no nos lo devuelva por error de caché de Google Sheets
 
 function mananaISO() {
   return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -553,7 +554,19 @@ async function cargarTodoCampo() {
     if (data.usuario) {
       $("nombreAsesorHeader").textContent = `Asesor: ${data.usuario}`;
     }
-    working = data.asignado;
+
+    // Filtro anti-latencia: si Google Sheets nos devuelve el mismo cliente que acabamos de tipificar, lo ignoramos.
+    if (data.asignado) {
+        if (data.asignado.ID === justSavedId) {
+            working = null; 
+        } else {
+            working = data.asignado;
+            justSavedId = null;
+        }
+    } else {
+        working = null;
+    }
+
     misCuentas = data.mis_cuentas || [];
     misVentasLista = data.mis_ventas || [];
     cupoMax = data.cupo_max || 150;
@@ -629,19 +642,32 @@ function renderMisVentasKPIs() {
   `;
 }
 
-async function solicitarRegistro() {
+async function solicitarRegistro(isAutoNext = false) {
   const btn = $("btnReq");
   if (btn) { btn.disabled = true; btn.textContent = "Asignando cliente..."; }
   try {
     const res = await fetch("/api/campo/solicitar_registro", { method: "POST" });
     const data = await res.json();
+    
     if (!data.ok) {
+      // Si falla porque Google Sheets aún no actualiza el estado ("Primero tipifica..."), reintentamos silenciosamente en 2s
+      if (data.msg.includes("Primero tipifica") && isAutoNext) {
+          setTimeout(() => solicitarRegistro(false), 2000);
+          return;
+      }
       toast(data.msg);
-      if (data.registro) { working = data.registro; renderBase(); }
-      else if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
+      if (data.registro && data.registro.ID !== justSavedId) { 
+          working = data.registro; 
+          renderBase(); 
+      } else {
+          working = null;
+          renderBase();
+      }
       return;
     }
+
     working = data.registro;
+    justSavedId = null; 
     usadosHoy++;
     selCont = null;
     selSub = null;
@@ -652,7 +678,6 @@ async function solicitarRegistro() {
   }
 }
 
-// NUEVA FUNCIÓN PARA SUBIR UN REGISTRO GUARDADO AL PANEL PRINCIPAL
 function retipificarCuenta(idRegistro) {
   const cuenta = misCuentas.find(c => c.ID === idRegistro);
   if (cuenta) {
@@ -660,7 +685,7 @@ function retipificarCuenta(idRegistro) {
     selCont = null;
     selSub = null;
     renderBase();
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sube la pantalla
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
     toast("Registro cargado. Puedes volver a tipificar.");
   }
 }
@@ -708,16 +733,29 @@ async function guardarTipificacion() {
 
     toast(data.msg);
 
-    // Limpiamos la pantalla localmente AL INSTANTE 
+    // Marcamos este ID como "guardado" para que el caché de Google Sheets no nos engañe
+    justSavedId = working.ID;
+    
+    // Limpiamos pantalla de inmediato
     working = null;
     selCont = null;
     selSub = null;
-    renderBase();
 
-    // Retrasamos 1.5 segundos la consulta a Google Sheets
+    // Efecto visual: Auto-Next (Buscando cliente automáticamente)
+    const cont = $("contenedorRegistro");
+    if (cont) {
+        cont.innerHTML = `
+          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:40px 16px;text-align:center;">
+            <p style="color:var(--primary); font-weight:800; font-size:1.1rem; margin-bottom:8px;">✅ ¡Guardado con éxito!</p>
+            <p style="color:var(--muted); font-size:0.9rem;">Buscando el siguiente cliente automáticamente...</p>
+          </div>`;
+    }
+
+    // Esperamos 2.5 segundos para que Google Sheets procese y pedimos uno nuevo
     setTimeout(() => {
-      cargarTodoCampo();
-    }, 1500);
+        solicitarRegistro(true); 
+        cargarTodoCampo(); // Actualiza los contadores de la derecha sin re-asignar el viejo
+    }, 2500);
 
   } catch (e) {
     toast("Error de conexión al guardar.");
@@ -735,14 +773,17 @@ function renderBase() {
   const r = working;
 
   if (!r) {
-    $("tituloPanelReg").textContent = "Registro asignado";
-    $("idRegLabel").textContent = "";
-    cont.innerHTML = `
-      <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
-        <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
-        <button type="button" class="btn-submit" id="btnReq" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
-      </div>`;
-    $("btnReq").onclick = solicitarRegistro;
+    // Si no hay registro activo, pero justSavedId existe, significa que está en la pausa del Siguiente Automático
+    if (!justSavedId) {
+      $("tituloPanelReg").textContent = "Registro asignado";
+      $("idRegLabel").textContent = "";
+      cont.innerHTML = `
+        <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
+          <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
+          <button type="button" class="btn-submit" id="btnReq" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
+        </div>`;
+      $("btnReq").onclick = solicitarRegistro;
+    }
   } else {
     $("idRegLabel").textContent = r.ID || "";
     const esVenta = selSub && selSub.startsWith("Venta");
@@ -811,7 +852,6 @@ function renderBase() {
   if (!misCuentas.length) {
     lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
   } else {
-    // 🔥 CAMBIO: Modificamos el diseño de las tarjetas para incluir el botón Gestionar
     lista.innerHTML = misCuentas.map(c => `
       <div class="cuenta-item" style="flex-wrap: wrap; gap: 8px;">
         <div style="flex: 1; min-width: 180px;">
