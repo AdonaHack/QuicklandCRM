@@ -700,7 +700,7 @@ async function guardarTipificacion() {
       if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
       return toast(data.msg);
     }
-    
+
     // Registramos el ID guardado para evadir el caché
     justSavedId = working.ID;
     
