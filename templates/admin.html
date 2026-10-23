@@ -209,6 +209,7 @@
               <th>DNI / RUC</th>
               <th>Cliente</th>
               <th>Celular</th>
+              <th>Correo</th>
               <th>Distrito / Dirección</th>
               <th>Plan</th>
               <th>Estado Back Office</th>
@@ -227,7 +228,10 @@
     <div class="kpis" id="kpiBase"></div>
 
     <section class="panel">
-      <h2>📈 Cuánto van Gestionando los Ejecutivos de Ventas</h2>
+      <h2>
+        <span>📈 Cuánto van Gestionando los Ejecutivos de Ventas</span>
+        <small id="cupoAdminLbl" style="font:600 0.82rem var(--f-sans);color:var(--muted);">Cupo diario por asesor: 150</small>
+      </h2>
       <div class="tbl">
         <table>
           <thead>
@@ -281,7 +285,7 @@ let listaUsuarios = [];
 let listaVentas = [];
 let listaBase = [];
 let listaEjecutivos = [];
-let cupoDiario = 40;
+let cupoDiario = 150;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -304,7 +308,8 @@ async function cargarTodoAdmin() {
     listaVentas = data.ventas || [];
     listaBase = data.base || [];
     listaEjecutivos = data.ejecutivos || [];
-    cupoDiario = data.cupo_max || 40;
+    cupoDiario = data.cupo_max || 150;
+    if ($("cupoAdminLbl")) $("cupoAdminLbl").textContent = `Cupo diario por asesor: ${cupoDiario}`;
 
     renderUsuarios();
     renderVentas();
@@ -407,7 +412,8 @@ function renderVentas() {
         <td class="mono">${esc(v.DNI_RUC)}</td>
         <td><b>${esc(v.CLIENTE)}</b></td>
         <td class="mono">${esc(v.CELULAR)}</td>
-        <td>${esc(v.DISTRITO)}</td>
+        <td>${esc(v.CORREO || "—")}</td>
+        <td>${esc(v.DISTRITO)}${v.DIRECCION ? `<br><small style="color:var(--muted)">📍 ${esc(v.DIRECCION)}</small>` : ""}</td>
         <td><span class="pill p-vend">${esc(v.PLAN)}</span></td>
         <td>
           <select id="estVenta_${f}" style="width:185px;">
