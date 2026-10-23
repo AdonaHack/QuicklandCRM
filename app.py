@@ -19,7 +19,7 @@ SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "QuicklandCRM")
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 
 CFG_BASE = {
-    "cupo": 150,
+    "cupo": 40,
     "maxNoContesta": 3,
     "maxCorta": 2,
     "maxSinContacto": 2,
@@ -77,36 +77,16 @@ def get_or_create_ventas_sheet(sh):
     try:
         ws = sh.worksheet("QuicklandCRM_Ventas")
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title="QuicklandCRM_Ventas", rows="1000", cols="22")
-
-    if ws.col_count < 20:
-        ws.add_cols(20 - ws.col_count)
+        ws = sh.add_worksheet(title="QuicklandCRM_Ventas", rows="1000", cols="15")
 
     primera_fila = ws.row_values(1)
     encabezados = [
-        "ID_VENTA",                  # A (1)
-        "FECHA",                     # B (2)
-        "ASESOR",                    # C (3)
-        "DNI_RUC",                   # D (4)
-        "CLIENTE",                   # E (5)
-        "CELULAR",                   # F (6)
-        "DISTRITO",                  # G (7)
-        "DIRECCION",                 # H (8)
-        "COORDENADAS",               # I (9)
-        "PLAN",                      # J (10)
-        "OBSERVACIONES",             # K (11)
-        "ESTADO",                    # L (12)
-        "COMENTARIO_BACK",           # M (13)
-        "ORIGEN_BASE_ID",            # N (14)
-        "CORREO",                    # O (15)
-        "NUMERO_RECIBO_CLIENTE",     # P (16)
-        "FECHA_VENCIMIENTO_RECIBO",  # Q (17)
-        "ESTADO_PAGO_CLIENTE",       # R (18)
-        "ESTADO_COMISION",           # S (19)
-        "FECHA_PAGO_COMISION"        # T (20)
+        "ID_VENTA", "FECHA", "ASESOR", "DNI_RUC", "CLIENTE", "CELULAR",
+        "DISTRITO", "DIRECCION", "COORDENADAS", "PLAN", "OBSERVACIONES",
+        "ESTADO", "COMENTARIO_BACK", "ORIGEN_BASE_ID"
     ]
-    if primera_fila[:20] != encabezados:
-        ws.update("A1:T1", [encabezados])
+    if not primera_fila:
+        ws.update("A1:N1", [encabezados])
     return ws
 
 def login_required(f):
@@ -263,7 +243,7 @@ def postventa_view():
 # ==========================================================
 # FUNCIÓN AUXILIAR: ENVIAR VENTA DIRECTO A BACKOFFICE
 # ==========================================================
-def registrar_venta_en_bandeja_back(sh, asesor, dni_ruc, cliente, celular, distrito, direccion, coordenadas, plan, observaciones, origen_base_id="", correo=""):
+def registrar_venta_en_bandeja_back(sh, asesor, dni_ruc, cliente, celular, distrito, direccion, coordenadas, plan, observaciones, origen_base_id=""):
     ws_ventas = get_or_create_ventas_sheet(sh)
     filas_actuales = len(ws_ventas.get_all_values())
     id_venta = f"V{1000 + filas_actuales}"
@@ -283,13 +263,7 @@ def registrar_venta_en_bandeja_back(sh, asesor, dni_ruc, cliente, celular, distr
         observaciones,              # K: OBSERVACIONES
         "PENDIENTE VALIDACIÓN",     # L: ESTADO
         "",                         # M: COMENTARIO_BACK
-        origen_base_id,             # N: ORIGEN_BASE_ID
-        correo,                     # O: CORREO
-        "",                         # P: NUMERO_RECIBO_CLIENTE
-        "",                         # Q: FECHA_VENCIMIENTO_RECIBO
-        "Pendiente",                # R: ESTADO_PAGO_CLIENTE
-        "Pendiente instalación",    # S: ESTADO_COMISION
-        ""                          # T: FECHA_PAGO_COMISION
+        origen_base_id              # N: ORIGEN_BASE_ID
     ]
     ws_ventas.append_row(nueva_fila, value_input_option="USER_ENTERED")
     return id_venta
@@ -313,8 +287,7 @@ def api_registrar_venta():
             coordenadas=data.get("coordenadas", ""),
             plan=data.get("plan", ""),
             observaciones=data.get("observaciones", ""),
-            origen_base_id=data.get("origen_base_id", "EXTERNA"),
-            correo=data.get("correo", "").strip()
+            origen_base_id=data.get("origen_base_id", "EXTERNA")
         )
         return jsonify({"ok": True, "msg": f"Venta {id_v} enviada a la bandeja de Back Office."})
     except Exception as e:
@@ -460,7 +433,6 @@ def api_campo_tipificar():
         obs = str(data.get("observaciones", "")).strip()
         fecha_agenda = str(data.get("fecha_agenda", "")).strip()
         direccion_venta = str(data.get("direccion", "")).strip()
-        correo_venta = str(data.get("correo", "")).strip()
 
         if not sub:
             return jsonify({"ok": False, "msg": "Elige la tipificación antes de guardar."}), 400
@@ -493,7 +465,7 @@ def api_campo_tipificar():
         vence = ""
         disponible = ""
         agenda = ""
-        motivo = f"[Correo: {correo_venta}] {obs}".strip() if correo_venta else obs
+        motivo = obs
         id_venta_creada = None
 
         def soltar_a_base():
@@ -519,8 +491,7 @@ def api_campo_tipificar():
                 coordenadas="",
                 plan=plan_elegido,
                 observaciones=obs,
-                origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}"),
-                correo=correo_venta
+                origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}")
             )
         elif sub in ["Interesado en propuesta", "Se envía propuesta"]:
             nuevo_estado = "EN GESTIÓN"
@@ -737,68 +708,6 @@ def api_backoffice_actualizar_base():
         return jsonify({"ok": True, "msg": f"Registro de base actualizado a {nuevo_estado}."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al actualizar BASE DE DATOS: {str(e)}"}), 500
-
-# ==========================================================
-# API POST-VENTA (/api/ventas)
-# ==========================================================
-@app.route("/api/ventas", methods=["GET"])
-@login_required
-def api_get_ventas_postventa():
-    try:
-        sh = get_spreadsheet()
-        ws_ventas = get_or_create_ventas_sheet(sh)
-        raw_ventas = ws_ventas.get_all_records()
-        data_out = []
-        for idx, v in enumerate(raw_ventas, start=2):
-            plan_str = str(v.get("PLAN", ""))
-            monto_com = 69 if "600" in plan_str else 59
-            est_bo = str(v.get("ESTADO", "PENDIENTE VALIDACIÓN"))
-            data_out.append({
-                "_fila": idx,
-                "ID_VENTA": v.get("ID_VENTA", f"V{1000+idx-1}"),
-                "CLIENTE_NOMBRE": v.get("CLIENTE", ""),
-                "CORREO": v.get("CORREO", ""),
-                "ASESOR_CAMPO": v.get("ASESOR", ""),
-                "PLAN_PRODUCTO": plan_str,
-                "ESTADO_INSTALACION": "Instalado" if ("INSTALADO" in est_bo.upper() or "ACTIVADO" in est_bo.upper()) else est_bo,
-                "NUMERO_RECIBO_CLIENTE": v.get("NUMERO_RECIBO_CLIENTE", ""),
-                "FECHA_VENCIMIENTO_RECIBO": v.get("FECHA_VENCIMIENTO_RECIBO", ""),
-                "ESTADO_PAGO_CLIENTE": v.get("ESTADO_PAGO_CLIENTE") or "Pendiente",
-                "ESTADO_COMISION": v.get("ESTADO_COMISION") or "Pendiente instalación",
-                "FECHA_PAGO_COMISION": v.get("FECHA_PAGO_COMISION", ""),
-                "MONTO_COMISION": monto_com
-            })
-        return jsonify({"status": "success", "data": data_out})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/ventas/<id_venta>", methods=["PATCH"])
-@login_required
-def api_patch_venta_postventa(id_venta):
-    try:
-        payload = request.get_json() or {}
-        sh = get_spreadsheet()
-        ws_ventas = get_or_create_ventas_sheet(sh)
-        registros = ws_ventas.get_all_records()
-        fila_encontrada = None
-        for idx, r in enumerate(registros, start=2):
-            if str(r.get("ID_VENTA", "")).strip() == str(id_venta).strip():
-                fila_encontrada = idx
-                break
-        if not fila_encontrada:
-            return jsonify({"status": "error", "message": "Venta no encontrada"}), 404
-
-        valores_pv = [[
-            str(payload.get("numero_recibo", "")).strip(),
-            str(payload.get("fecha_vencimiento_recibo", "")).strip(),
-            str(payload.get("estado_pago_cliente", "Pendiente")).strip(),
-            str(payload.get("estado_comision", "Pendiente instalación")).strip(),
-            str(payload.get("fecha_pago_comision", "")).strip()
-        ]]
-        ws_ventas.update(f"P{fila_encontrada}:T{fila_encontrada}", valores_pv)
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ==========================================================
 # API EXCLUSIVA DE ADMIN: CREAR Y GESTIONAR USUARIOS
