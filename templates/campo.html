@@ -289,7 +289,6 @@
 </header>
 
 <div class="main-container" id="mainWrap">
-  <!-- KPIs Superiores limpios (calculados por JS) -->
   <div class="top-kpis">
     <div class="kpi-card">
       <div class="k-title">VENTAS EXITOSAS</div>
@@ -303,7 +302,6 @@
     </div>
   </div>
 
-  <!-- Barra de 3 Pestañas: Nueva Venta | Base de Datos | Mis Ventas -->
   <div class="tabs-bar" role="tablist">
     <button type="button" class="tab-btn" id="btnTabNueva" aria-selected="true">
       <span>⊕</span> Nueva Venta
@@ -316,7 +314,7 @@
     </button>
   </div>
 
-  <!-- ==================== PESTAÑA 1: NUEVA VENTA EXTERNA ==================== -->
+  <!-- PESTAÑA 1: NUEVA VENTA EXTERNA -->
   <section id="secNuevaVenta" class="card-panel">
     <form id="formNuevaVenta">
       <div class="form-group">
@@ -333,6 +331,11 @@
           <label class="f-label">Teléfono Móvil</label>
           <input type="tel" id="v_celular" name="celular" required placeholder="987654321">
         </div>
+      </div>
+
+      <div class="form-group">
+        <label class="f-label">Correo Electrónico del Cliente</label>
+        <input type="email" id="v_correo" name="correo" required placeholder="cliente@correo.com">
       </div>
 
       <div class="form-group">
@@ -373,7 +376,7 @@
     </form>
   </section>
 
-  <!-- ==================== PESTAÑA 2: BASE DE DATOS ==================== -->
+  <!-- PESTAÑA 2: BASE DE DATOS -->
   <section id="secBaseDatos" hidden>
     <div class="grid-base">
       <div class="card-panel">
@@ -393,7 +396,7 @@
         <div class="card-panel">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <b style="font-size:0.95rem;">Mi Meta Diaria de Base</b>
-            <span class="mono" id="cupoTexto" style="color:var(--primary);font-weight:800;">0/40</span>
+            <span class="mono" id="cupoTexto" style="color:var(--primary);font-weight:800;">0/150</span>
           </div>
           <div class="cupo-bar">
             <div class="bar-bg"><i class="bar-fill" id="cupoBarra" style="width:0%"></i></div>
@@ -415,7 +418,7 @@
     </div>
   </section>
 
-  <!-- ==================== PESTAÑA 3: MIS VENTAS ==================== -->
+  <!-- PESTAÑA 3: MIS VENTAS -->
   <section id="secMisVentas" class="card-panel" hidden>
     <h3 style="margin:0 0 14px;font-size:1.05rem;">Historial y Estado de Mis Ventas</h3>
     <div id="contenedorTablaMisVentas">
@@ -475,6 +478,7 @@ $("formNuevaVenta").onsubmit = async (e) => {
     cliente: $("v_cliente").value.trim(),
     dni_ruc: $("v_dni_ruc").value.trim(),
     celular: $("v_celular").value.trim(),
+    correo: $("v_correo").value.trim(),
     distrito: dirDistrito,
     direccion: dirDistrito,
     plan: $("v_plan").value,
@@ -533,7 +537,7 @@ let misCuentas = [];
 let misVentasLista = [];
 let selCont = null;
 let selSub = null;
-let cupoMax = 40;
+let cupoMax = 150;
 let usadosHoy = 0;
 
 function mananaISO() {
@@ -552,7 +556,7 @@ async function cargarTodoCampo() {
     working = data.asignado;
     misCuentas = data.mis_cuentas || [];
     misVentasLista = data.mis_ventas || [];
-    cupoMax = data.cupo_max || 40;
+    cupoMax = data.cupo_max || 150;
     usadosHoy = data.usados || 0;
 
     renderMisVentasKPIs();
@@ -593,6 +597,7 @@ function renderMisVentasKPIs() {
             <th>Fecha</th>
             <th>Cliente</th>
             <th>DNI / RUC</th>
+            <th>Correo</th>
             <th>Plan</th>
             <th>Estado Back Office</th>
             <th>Comentario Back</th>
@@ -611,6 +616,7 @@ function renderMisVentasKPIs() {
                 <td class="mono">${esc(v.FECHA || v.Fecha || "—")}</td>
                 <td><b>${esc(v.CLIENTE || v.Cliente || "—")}</b></td>
                 <td class="mono">${esc(v.DNI_RUC || "—")}</td>
+                <td>${esc(v.CORREO || "—")}</td>
                 <td>${esc(v.PLAN || v.Plan || "—")}</td>
                 <td><span class="pill ${cls}">${esc(est)}</span></td>
                 <td style="color:var(--muted);">${esc(v.COMENTARIO_BACK || "—")}</td>
@@ -646,11 +652,25 @@ async function solicitarRegistro() {
   }
 }
 
+// NUEVA FUNCIÓN PARA SUBIR UN REGISTRO GUARDADO AL PANEL PRINCIPAL
+function retipificarCuenta(idRegistro) {
+  const cuenta = misCuentas.find(c => c.ID === idRegistro);
+  if (cuenta) {
+    working = cuenta;
+    selCont = null;
+    selSub = null;
+    renderBase();
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sube la pantalla
+    toast("Registro cargado. Puedes volver a tipificar.");
+  }
+}
+
 async function guardarTipificacion() {
   if (!working || !selSub) return toast("Selecciona una tipificación.");
   const obs = $("obs") ? $("obs").value.trim() : "";
   const agenda = $("agenda") ? $("agenda").value : "";
   const dirVenta = $("dirVenta") ? $("dirVenta").value.trim() : "";
+  const correoVenta = $("correoVenta") ? $("correoVenta").value.trim() : "";
 
   if (selSub === "Cl indica llamar nuevamente" && !agenda) {
     return toast("Indica la fecha para volver a llamar.");
@@ -658,27 +678,51 @@ async function guardarTipificacion() {
 
   let tipifEnvio = selSub;
   if (selSub.startsWith("Venta")) {
+    if (!correoVenta) return toast("Ingresa el correo electrónico del cliente.");
     tipifEnvio = "Venta Fija";
   }
 
-  const res = await fetch("/api/campo/tipificar", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id: working.ID,
-      fila: working._fila,
-      tipificacion: tipifEnvio,
-      plan_elegido: selSub,
-      observaciones: selSub.startsWith("Venta") ? `[${selSub}] ${obs}`.trim() : obs,
-      fecha_agenda: agenda,
-      direccion: dirVenta
-    })
-  });
-  const data = await res.json();
-  if (!data.ok) return toast(data.msg);
-  toast(data.msg);
-  working = null; selCont = null; selSub = null;
-  await cargarTodoCampo();
+  const btn = $("btnSave");
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando..."; }
+
+  try {
+    const res = await fetch("/api/campo/tipificar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: working.ID,
+        fila: working._fila,
+        tipificacion: tipifEnvio,
+        plan_elegido: selSub,
+        observaciones: selSub.startsWith("Venta") ? `[${selSub}] ${obs}`.trim() : obs,
+        fecha_agenda: agenda,
+        direccion: dirVenta,
+        correo: correoVenta
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
+      return toast(data.msg);
+    }
+
+    toast(data.msg);
+
+    // Limpiamos la pantalla localmente AL INSTANTE 
+    working = null;
+    selCont = null;
+    selSub = null;
+    renderBase();
+
+    // Retrasamos 1.5 segundos la consulta a Google Sheets
+    setTimeout(() => {
+      cargarTodoCampo();
+    }, 1500);
+
+  } catch (e) {
+    toast("Error de conexión al guardar.");
+    if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
+  }
 }
 
 function renderBase() {
@@ -731,9 +775,15 @@ function renderBase() {
       ${selSub ? `<div class="rule">${esc(REGLA[selSub])}</div>` : ""}
 
       ${esVenta ? `
-        <div class="form-group">
-          <label class="f-label">Dirección de Instalación</label>
-          <input type="text" id="dirVenta" placeholder="Av. Principal 123, Distrito">
+        <div class="form-row2">
+          <div>
+            <label class="f-label">Correo Electrónico del Cliente</label>
+            <input type="email" id="correoVenta" placeholder="cliente@correo.com" required>
+          </div>
+          <div>
+            <label class="f-label">Dirección de Instalación</label>
+            <input type="text" id="dirVenta" placeholder="Av. Principal 123, Distrito">
+          </div>
         </div>
       ` : ""}
 
@@ -761,13 +811,19 @@ function renderBase() {
   if (!misCuentas.length) {
     lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
   } else {
+    // 🔥 CAMBIO: Modificamos el diseño de las tarjetas para incluir el botón Gestionar
     lista.innerHTML = misCuentas.map(c => `
-      <div class="cuenta-item">
-        <div>
-          <div style="font-weight:700;">${esc(c.RAZON_SOCIAL && c.RAZON_SOCIAL !== "—" ? c.RAZON_SOCIAL : c.NOMBRE)}</div>
-          <div style="font-size:0.8rem;color:var(--muted);">${esc(c.RUC || c.DNI)} · ${esc(c.ULT_TIPIFICACION || "")}</div>
+      <div class="cuenta-item" style="flex-wrap: wrap; gap: 8px;">
+        <div style="flex: 1; min-width: 180px;">
+          <div style="font-weight:700; font-size:0.9rem;">${esc(c.RAZON_SOCIAL && c.RAZON_SOCIAL !== "—" ? c.RAZON_SOCIAL : c.NOMBRE)}</div>
+          <div style="font-size:0.8rem;color:var(--muted); margin-top:2px;">${esc(c.RUC || c.DNI)} · ${esc(c.ULT_TIPIFICACION || "Sin tipificación")}</div>
         </div>
-        <span class="pill p-asig">${esc(c.ESTADO)}</span>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          <span class="pill p-asig" style="font-size:0.65rem;">${esc(c.ESTADO)}</span>
+          <button type="button" class="btn-submit" style="padding: 5px 12px; font-size: 0.75rem; border-radius: 8px; width: auto; box-shadow: none; background: var(--primary-dark);" onclick="retipificarCuenta('${esc(c.ID)}')">
+            ✏️ Gestionar
+          </button>
+        </div>
       </div>
     `).join("");
   }
