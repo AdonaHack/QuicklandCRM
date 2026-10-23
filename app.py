@@ -62,6 +62,7 @@ def get_or_create_base_sheet(sh):
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title="BASE DE DATOS", rows="1000", cols="20")
     
+    # AUTO-REPARACIÓN DE COLUMNAS PARA BASE DE DATOS
     primera_fila = ws.row_values(1)
     encabezados = [
         "ID", "TIPO", "RUC", "RAZON_SOCIAL", "DNI", "NOMBRE",
@@ -69,7 +70,9 @@ def get_or_create_base_sheet(sh):
         "INTENTOS", "ULT_TIPIFICACION", "FECHA_AGENDA", "FECHA_VENCE",
         "DISPONIBLE_DESDE", "MOTIVO_OBSERVACION"
     ]
-    if not primera_fila:
+    if primera_fila[:17] != encabezados:
+        if ws.col_count < 17:
+            ws.add_cols(17 - ws.col_count)
         ws.update("A1:Q1", [encabezados])
     return ws
 
@@ -84,26 +87,11 @@ def get_or_create_ventas_sheet(sh):
 
     primera_fila = ws.row_values(1)
     encabezados = [
-        "ID_VENTA",                  # A (1)
-        "FECHA",                     # B (2)
-        "ASESOR",                    # C (3)
-        "DNI_RUC",                   # D (4)
-        "CLIENTE",                   # E (5)
-        "CELULAR",                   # F (6)
-        "DISTRITO",                  # G (7)
-        "DIRECCION",                 # H (8)
-        "COORDENADAS",               # I (9)
-        "PLAN",                      # J (10)
-        "OBSERVACIONES",             # K (11)
-        "ESTADO",                    # L (12)
-        "COMENTARIO_BACK",           # M (13)
-        "ORIGEN_BASE_ID",            # N (14)
-        "CORREO",                    # O (15)
-        "NUMERO_RECIBO_CLIENTE",     # P (16)
-        "FECHA_VENCIMIENTO_RECIBO",  # Q (17)
-        "ESTADO_PAGO_CLIENTE",       # R (18)
-        "ESTADO_COMISION",           # S (19)
-        "FECHA_PAGO_COMISION"        # T (20)
+        "ID_VENTA", "FECHA", "ASESOR", "DNI_RUC", "CLIENTE", "CELULAR",
+        "DISTRITO", "DIRECCION", "COORDENADAS", "PLAN", "OBSERVACIONES",
+        "ESTADO", "COMENTARIO_BACK", "ORIGEN_BASE_ID", "CORREO",
+        "NUMERO_RECIBO_CLIENTE", "FECHA_VENCIMIENTO_RECIBO", "ESTADO_PAGO_CLIENTE",
+        "ESTADO_COMISION", "FECHA_PAGO_COMISION"
     ]
     if primera_fila[:20] != encabezados:
         ws.update("A1:T1", [encabezados])
@@ -118,7 +106,7 @@ def login_required(f):
     return decorated_function
 
 # ==========================================================
-# LOGIN COMPATIBLE CON FETCH (JSON) Y FORMULARIO HTML
+# LOGIN
 # ==========================================================
 @app.route("/", methods=["GET", "POST"])
 @app.route("/login", methods=["GET", "POST"])
@@ -133,19 +121,9 @@ def login():
             if not data:
                 data = request.get_json(force=True, silent=True) or {}
 
-        usuario_input = str(
-            data.get("usuario") or data.get("username") or data.get("user") or ""
-        ).strip()
-        password_input = str(
-            data.get("password") or data.get("clave") or data.get("pass") or data.get("contraseña") or ""
-        ).strip()
-
-        es_ajax = (
-            request.is_json
-            or request.path in ["/api/login", "/auth"]
-            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-            or "application/json" in request.headers.get("Accept", "")
-        )
+        usuario_input = str(data.get("usuario") or data.get("username") or data.get("user") or "").strip()
+        password_input = str(data.get("password") or data.get("clave") or data.get("pass") or data.get("contraseña") or "").strip()
+        es_ajax = (request.is_json or request.path in ["/api/login", "/auth"] or request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""))
 
         try:
             sh = get_spreadsheet()
@@ -164,14 +142,7 @@ def login():
                     if estado_db not in ["activo", "1", "true", "si", "sí", ""]:
                         msg = "Tu usuario está Inactivo. Comunícate con el Administrador."
                         if es_ajax or request.data:
-                            return jsonify({
-                                "ok": False,
-                                "success": False,
-                                "status": "error",
-                                "error": msg,
-                                "msg": msg,
-                                "message": msg
-                            }), 403
+                            return jsonify({"ok": False, "success": False, "status": "error", "error": msg, "msg": msg, "message": msg}), 403
                         flash(msg, "error")
                         return render_template("login.html")
 
@@ -180,52 +151,23 @@ def login():
                     session["nombre"] = nombre_db
                     session["rol"] = rol_db
 
-                    if rol_db == "ADMIN":
-                        destino = url_for("admin_view")
-                    elif rol_db in ["BACKOFFICE", "BACK", "BACK_OFFICE"]:
-                        destino = url_for("backoffice_view")
-                    elif rol_db == "POSTVENTA":
-                        destino = url_for("postventa_view")
-                    else:
-                        destino = url_for("campo_view")
+                    if rol_db == "ADMIN": destino = url_for("admin_view")
+                    elif rol_db in ["BACKOFFICE", "BACK", "BACK_OFFICE"]: destino = url_for("backoffice_view")
+                    elif rol_db == "POSTVENTA": destino = url_for("postventa_view")
+                    else: destino = url_for("campo_view")
 
                     if es_ajax or request.data:
-                        return jsonify({
-                            "ok": True,
-                            "success": True,
-                            "status": "success",
-                            "rol": rol_db,
-                            "role": rol_db.lower(),
-                            "nombre": nombre_db,
-                            "usuario": user_db,
-                            "redirect": destino,
-                            "redirect_url": destino,
-                            "url": destino
-                        })
+                        return jsonify({"ok": True, "success": True, "status": "success", "rol": rol_db, "role": rol_db.lower(), "nombre": nombre_db, "usuario": user_db, "redirect": destino, "redirect_url": destino, "url": destino})
                     return redirect(destino)
 
             msg_err = "Usuario o contraseña incorrectos."
             if es_ajax or request.data:
-                return jsonify({
-                    "ok": False,
-                    "success": False,
-                    "status": "error",
-                    "error": msg_err,
-                    "msg": msg_err,
-                    "message": msg_err
-                }), 401
+                return jsonify({"ok": False, "success": False, "status": "error", "error": msg_err, "msg": msg_err, "message": msg_err}), 401
             flash(msg_err, "error")
         except Exception as e:
             msg_ex = f"Error al conectar con Google Sheets: {str(e)}"
             if es_ajax or request.data:
-                return jsonify({
-                    "ok": False,
-                    "success": False,
-                    "status": "error",
-                    "error": msg_ex,
-                    "msg": msg_ex,
-                    "message": msg_ex
-                }), 500
+                return jsonify({"ok": False, "success": False, "status": "error", "error": msg_ex, "msg": msg_ex, "message": msg_ex}), 500
             flash(msg_ex, "error")
 
     return render_template("login.html")
@@ -260,9 +202,6 @@ def admin_view():
 def postventa_view():
     return render_template("postventa.html", usuario=session.get("usuario"), nombre=session.get("nombre"), rol=session.get("rol"))
 
-# ==========================================================
-# FUNCIÓN AUXILIAR: ENVIAR VENTA DIRECTO A BACKOFFICE
-# ==========================================================
 def registrar_venta_en_bandeja_back(sh, asesor, dni_ruc, cliente, celular, distrito, direccion, coordenadas, plan, observaciones, origen_base_id="", correo=""):
     ws_ventas = get_or_create_ventas_sheet(sh)
     filas_actuales = len(ws_ventas.get_all_values())
@@ -270,26 +209,9 @@ def registrar_venta_en_bandeja_back(sh, asesor, dni_ruc, cliente, celular, distr
     ahora_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     nueva_fila = [
-        id_venta,                   # A: ID_VENTA
-        ahora_str,                  # B: FECHA
-        asesor,                     # C: ASESOR
-        dni_ruc,                    # D: DNI_RUC
-        cliente,                    # E: CLIENTE
-        celular,                    # F: CELULAR
-        distrito,                   # G: DISTRITO
-        direccion,                  # H: DIRECCION
-        coordenadas,                # I: COORDENADAS
-        plan,                       # J: PLAN
-        observaciones,              # K: OBSERVACIONES
-        "PENDIENTE VALIDACIÓN",     # L: ESTADO
-        "",                         # M: COMENTARIO_BACK
-        origen_base_id,             # N: ORIGEN_BASE_ID
-        correo,                     # O: CORREO
-        "",                         # P: NUMERO_RECIBO_CLIENTE
-        "",                         # Q: FECHA_VENCIMIENTO_RECIBO
-        "Pendiente",                # R: ESTADO_PAGO_CLIENTE
-        "Pendiente instalación",    # S: ESTADO_COMISION
-        ""                          # T: FECHA_PAGO_COMISION
+        id_venta, ahora_str, asesor, dni_ruc, cliente, celular, distrito, direccion,
+        coordenadas, plan, observaciones, "PENDIENTE VALIDACIÓN", "", origen_base_id, correo,
+        "", "", "Pendiente", "Pendiente instalación", ""
     ]
     ws_ventas.append_row(nueva_fila, value_input_option="USER_ENTERED")
     return id_venta
@@ -301,28 +223,16 @@ def api_registrar_venta():
         data = request.get_json() if request.is_json else request.form.to_dict()
         sh = get_spreadsheet()
         asesor = session.get("nombre") or session.get("usuario")
-
         id_v = registrar_venta_en_bandeja_back(
-            sh=sh,
-            asesor=asesor,
-            dni_ruc=data.get("dni_ruc", ""),
-            cliente=data.get("cliente", ""),
-            celular=data.get("celular", ""),
-            distrito=data.get("distrito", ""),
-            direccion=data.get("direccion", ""),
-            coordenadas=data.get("coordenadas", ""),
-            plan=data.get("plan", ""),
-            observaciones=data.get("observaciones", ""),
-            origen_base_id=data.get("origen_base_id", "EXTERNA"),
-            correo=data.get("correo", "").strip()
+            sh=sh, asesor=asesor, dni_ruc=data.get("dni_ruc", ""), cliente=data.get("cliente", ""),
+            celular=data.get("celular", ""), distrito=data.get("distrito", ""), direccion=data.get("direccion", ""),
+            coordenadas=data.get("coordenadas", ""), plan=data.get("plan", ""), observaciones=data.get("observaciones", ""),
+            origen_base_id=data.get("origen_base_id", "EXTERNA"), correo=data.get("correo", "").strip()
         )
         return jsonify({"ok": True, "msg": f"Venta {id_v} enviada a la bandeja de Back Office."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al registrar venta: {str(e)}"}), 500
 
-# ==========================================================
-# API CAMPO: GESTIÓN DE HOJA 'BASE DE DATOS' Y MIS VENTAS
-# ==========================================================
 @app.route("/api/campo/mi_base", methods=["GET"])
 @login_required
 def api_campo_mi_base():
@@ -365,15 +275,7 @@ def api_campo_mi_base():
         except Exception:
             pass
 
-        return jsonify({
-            "ok": True,
-            "usuario": nombre,
-            "asignado": asignado_actual,
-            "mis_cuentas": mis_cuentas,
-            "mis_ventas": mis_ventas,
-            "usados": usados_hoy,
-            "cupo_max": CFG_BASE["cupo"]
-        })
+        return jsonify({"ok": True, "usuario": nombre, "asignado": asignado_actual, "mis_cuentas": mis_cuentas, "mis_ventas": mis_ventas, "usados": usados_hoy, "cupo_max": CFG_BASE["cupo"]})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al leer BASE DE DATOS: {str(e)}"}), 500
 
@@ -389,8 +291,8 @@ def api_campo_solicitar_registro():
         ws = get_or_create_base_sheet(sh)
         registros = ws.get_all_records()
         hoy_str = datetime.now().strftime("%Y-%m-%d")
-
         usados = 0
+
         for idx, r in enumerate(registros, start=2):
             estado = str(r.get("ESTADO", "")).strip().upper()
             asig = str(r.get("ASIGNADO_A", "")).strip()
@@ -399,11 +301,7 @@ def api_campo_solicitar_registro():
                 usados += 1
             if asig.lower() in identificadores and estado == "ASIGNADO":
                 r["_fila"] = idx
-                return jsonify({
-                    "ok": False,
-                    "msg": "Primero tipifica el registro que tienes asignado.",
-                    "registro": r
-                }), 400
+                return jsonify({"ok": False, "msg": "Primero tipifica el registro que tienes asignado.", "registro": r}), 400
 
         if usados >= CFG_BASE["cupo"]:
             return jsonify({"ok": False, "msg": f"Llegaste a tu cupo de {CFG_BASE['cupo']} registros."}), 400
@@ -411,21 +309,16 @@ def api_campo_solicitar_registro():
         pool = []
         for idx, r in enumerate(registros, start=2):
             tiene_datos = any([r.get("RUC"), r.get("DNI"), r.get("RAZON_SOCIAL"), r.get("NOMBRE"), r.get("CELULAR")])
-            if not tiene_datos:
-                continue
-
+            if not tiene_datos: continue
             estado = str(r.get("ESTADO", "")).strip().upper()
-            if estado == "":
-                estado = "LIBRE"
-
+            if estado == "": estado = "LIBRE"
             ult_user = str(r.get("ULT_USUARIO", "")).strip().lower()
             disp = str(r.get("DISPONIBLE_DESDE", "")).strip()
 
             if estado == "LIBRE" and ult_user not in identificadores:
                 if not disp or disp <= hoy_str:
                     r["_fila"] = idx
-                    if not r.get("ID"):
-                        r["ID"] = f"B{1000 + idx - 1}"
+                    if not r.get("ID"): r["ID"] = f"B{1000 + idx - 1}"
                     pool.append(r)
 
         if not pool:
@@ -468,7 +361,6 @@ def api_campo_tipificar():
         sh = get_spreadsheet()
         ws = get_or_create_base_sheet(sh)
         registros = ws.get_all_records()
-
         fila_encontrada = None
         rec = None
 
@@ -478,14 +370,11 @@ def api_campo_tipificar():
                 rec = r
                 break
 
-        if not rec:
-            return jsonify({"ok": False, "msg": "No se encontró el registro en BASE DE DATOS."}), 404
+        if not rec: return jsonify({"ok": False, "msg": "No se encontró el registro en BASE DE DATOS."}), 404
 
         ahora = datetime.now()
-        try:
-            intentos = int(rec.get("INTENTOS") or 0)
-        except ValueError:
-            intentos = 0
+        try: intentos = int(rec.get("INTENTOS") or 0)
+        except ValueError: intentos = 0
 
         nuevo_estado = str(rec.get("ESTADO", "LIBRE")).strip().upper()
         asignado_a = nombre
@@ -509,18 +398,9 @@ def api_campo_tipificar():
             dni_o_ruc = str(rec.get("RUC") or rec.get("DNI") or "").strip()
             nom_cliente = str(rec.get("RAZON_SOCIAL") if rec.get("RAZON_SOCIAL") not in ["", "—"] else rec.get("NOMBRE")).strip()
             id_venta_creada = registrar_venta_en_bandeja_back(
-                sh=sh,
-                asesor=nombre,
-                dni_ruc=dni_o_ruc,
-                cliente=nom_cliente,
-                celular=str(rec.get("CELULAR", "")),
-                distrito=str(rec.get("DISTRITO", "")),
-                direccion=direccion_venta,
-                coordenadas="",
-                plan=plan_elegido,
-                observaciones=obs,
-                origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}"),
-                correo=correo_venta
+                sh=sh, asesor=nombre, dni_ruc=dni_o_ruc, cliente=nom_cliente, celular=str(rec.get("CELULAR", "")),
+                distrito=str(rec.get("DISTRITO", "")), direccion=direccion_venta, coordenadas="", plan=plan_elegido,
+                observaciones=obs, origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}"), correo=correo_venta
             )
         elif sub in ["Interesado en propuesta", "Se envía propuesta"]:
             nuevo_estado = "EN GESTIÓN"
@@ -531,56 +411,33 @@ def api_campo_tipificar():
             vence = (ahora + timedelta(days=CFG_BASE["diasAgenda"])).strftime("%Y-%m-%d")
         elif sub == "No contesta":
             intentos += 1
-            if intentos >= CFG_BASE["maxNoContesta"]:
-                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Máx. intentos ({obs})".strip()
-            else:
-                soltar_a_base()
+            if intentos >= CFG_BASE["maxNoContesta"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Máx. intentos ({obs})".strip()
+            else: soltar_a_base()
         elif sub == "Corta llamada":
             intentos += 1
-            if intentos >= CFG_BASE["maxCorta"]:
-                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Corta llamada x2 ({obs})".strip()
-            else:
-                soltar_a_base()
+            if intentos >= CFG_BASE["maxCorta"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Corta llamada x2 ({obs})".strip()
+            else: soltar_a_base()
         elif sub == "Sin contacto":
             intentos += 1
-            if intentos >= CFG_BASE["maxSinContacto"]:
-                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Número inválido ({obs})".strip()
-            else:
-                soltar_a_base()
+            if intentos >= CFG_BASE["maxSinContacto"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Número inválido ({obs})".strip()
+            else: soltar_a_base()
         elif sub == "No desea":
             nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"No desea ({obs})".strip()
         elif sub == "Cliente crítico":
             nuevo_estado, asignado_a, motivo = "BLOQUEADO", "", f"Cliente crítico ({obs})".strip()
 
         valores_actualizados = [[
-            nuevo_estado,   # I: ESTADO
-            asignado_a,     # J: ASIGNADO_A
-            ult_usuario,    # K: ULT_USUARIO
-            intentos,       # L: INTENTOS
-            plan_elegido,   # M: ULT_TIPIFICACION
-            agenda,         # N: FECHA_AGENDA
-            vence,          # O: FECHA_VENCE
-            disponible,     # P: DISPONIBLE_DESDE
-            motivo          # Q: MOTIVO_OBSERVACION
+            nuevo_estado, asignado_a, ult_usuario, intentos, plan_elegido, agenda, vence, disponible, motivo
         ]]
         ws.update(f"I{fila_encontrada}:Q{fila_encontrada}", valores_actualizados)
 
         mensaje_ok = f"Guardado: {plan_elegido}"
-        if id_venta_creada:
-            mensaje_ok = f"¡Venta registrada! Enviada directo a Back Office ({id_venta_creada})."
+        if id_venta_creada: mensaje_ok = f"¡Venta registrada! Enviada directo a Back Office ({id_venta_creada})."
 
-        return jsonify({
-            "ok": True,
-            "msg": mensaje_ok,
-            "nuevo_estado": nuevo_estado,
-            "id_venta": id_venta_creada
-        })
+        return jsonify({"ok": True, "msg": mensaje_ok, "nuevo_estado": nuevo_estado, "id_venta": id_venta_creada})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al guardar tipificación: {str(e)}"}), 500
 
-# ==========================================================
-# API BACKOFFICE Y ADMIN
-# ==========================================================
 @app.route("/api/backoffice/datos", methods=["GET"])
 @login_required
 def api_backoffice_datos():
@@ -604,29 +461,18 @@ def api_backoffice_datos():
 
             if rol_u in ["VENTAS", "CAMPO", "ASESOR"] and nombre_u:
                 ejecutivos_stats[nombre_u.upper()] = {
-                    "nombre": nombre_u,
-                    "usuario": user_u,
-                    "estado": estado_u,
-                    "fila_usuario": idx,
-                    "gestionados_total": 0,
-                    "asignados_ahora": 0,
-                    "en_gestion": 0,
-                    "agendados": 0,
-                    "no_efectivos": 0,
-                    "ventas_base": 0,
-                    "ventas_totales": 0
+                    "nombre": nombre_u, "usuario": user_u, "estado": estado_u, "fila_usuario": idx,
+                    "gestionados_total": 0, "asignados_ahora": 0, "en_gestion": 0, "agendados": 0,
+                    "no_efectivos": 0, "ventas_base": 0, "ventas_totales": 0
                 }
 
         raw_base = ws_base.get_all_records()
         base_list = []
         for idx, r in enumerate(raw_base, start=2):
-            if not any([r.get("RUC"), r.get("DNI"), r.get("RAZON_SOCIAL"), r.get("NOMBRE"), r.get("CELULAR")]):
-                continue
+            if not any([r.get("RUC"), r.get("DNI"), r.get("RAZON_SOCIAL"), r.get("NOMBRE"), r.get("CELULAR")]): continue
             r["_fila"] = idx
-            if not r.get("ID"):
-                r["ID"] = f"B{1000 + idx - 1}"
-            if not r.get("ESTADO"):
-                r["ESTADO"] = "LIBRE"
+            if not r.get("ID"): r["ID"] = f"B{1000 + idx - 1}"
+            if not r.get("ESTADO"): r["ESTADO"] = "LIBRE"
             base_list.append(r)
 
             st = str(r.get("ESTADO", "LIBRE")).strip().upper()
@@ -637,30 +483,17 @@ def api_backoffice_datos():
             if responsable:
                 if responsable not in ejecutivos_stats:
                     ejecutivos_stats[responsable] = {
-                        "nombre": r.get("ASIGNADO_A") or r.get("ULT_USUARIO"),
-                        "usuario": responsable.lower(),
-                        "estado": "Activo",
-                        "fila_usuario": None,
-                        "gestionados_total": 0,
-                        "asignados_ahora": 0,
-                        "en_gestion": 0,
-                        "agendados": 0,
-                        "no_efectivos": 0,
-                        "ventas_base": 0,
-                        "ventas_totales": 0
+                        "nombre": r.get("ASIGNADO_A") or r.get("ULT_USUARIO"), "usuario": responsable.lower(), "estado": "Activo",
+                        "fila_usuario": None, "gestionados_total": 0, "asignados_ahora": 0, "en_gestion": 0, "agendados": 0,
+                        "no_efectivos": 0, "ventas_base": 0, "ventas_totales": 0
                     }
                 ek = ejecutivos_stats[responsable]
                 ek["gestionados_total"] += 1
-                if st == "ASIGNADO":
-                    ek["asignados_ahora"] += 1
-                elif st == "EN GESTIÓN":
-                    ek["en_gestion"] += 1
-                elif st == "AGENDADO":
-                    ek["agendados"] += 1
-                elif st == "VENDIDO":
-                    ek["ventas_base"] += 1
-                elif st in ["LIBRE", "EXCLUIDO", "BLOQUEADO"]:
-                    ek["no_efectivos"] += 1
+                if st == "ASIGNADO": ek["asignados_ahora"] += 1
+                elif st == "EN GESTIÓN": ek["en_gestion"] += 1
+                elif st == "AGENDADO": ek["agendados"] += 1
+                elif st == "VENDIDO": ek["ventas_base"] += 1
+                elif st in ["LIBRE", "EXCLUIDO", "BLOQUEADO"]: ek["no_efectivos"] += 1
 
         raw_ventas = ws_ventas.get_all_records()
         ventas_list = []
@@ -672,15 +505,7 @@ def api_backoffice_datos():
                 ejecutivos_stats[asesor_v]["ventas_totales"] += 1
 
         ventas_list.reverse()
-
-        return jsonify({
-            "ok": True,
-            "base": base_list,
-            "ventas": ventas_list,
-            "ejecutivos": list(ejecutivos_stats.values()),
-            "usuarios": usuarios_list,
-            "cupo_max": CFG_BASE["cupo"]
-        })
+        return jsonify({"ok": True, "base": base_list, "ventas": ventas_list, "ejecutivos": list(ejecutivos_stats.values()), "usuarios": usuarios_list, "cupo_max": CFG_BASE["cupo"]})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error cargando datos: {str(e)}"}), 500
 
@@ -694,8 +519,7 @@ def api_backoffice_actualizar_venta():
         comentario_back = str(data.get("comentario_back", "")).strip()
         origen_base_id = str(data.get("origen_base_id", "")).strip()
 
-        if fila < 2 or not nuevo_estado:
-            return jsonify({"ok": False, "msg": "Datos inválidos para actualizar la venta."}), 400
+        if fila < 2 or not nuevo_estado: return jsonify({"ok": False, "msg": "Datos inválidos para actualizar la venta."}), 400
 
         sh = get_spreadsheet()
         ws_ventas = get_or_create_ventas_sheet(sh)
@@ -707,10 +531,8 @@ def api_backoffice_actualizar_venta():
             for idx, r in enumerate(registros_base, start=2):
                 if str(r.get("ID", "")).strip() == origen_base_id:
                     obs_actual = str(r.get("MOTIVO_OBSERVACION", "")).strip()
-                    nueva_obs = f"[Back: {nuevo_estado}] {comentario_back} | {obs_actual}".strip(" |")
-                    ws_base.update_cell(idx, 17, nueva_obs)
+                    ws_base.update_cell(idx, 17, f"[Back: {nuevo_estado}] {comentario_back} | {obs_actual}".strip(" |"))
                     break
-
         return jsonify({"ok": True, "msg": f"Estado de venta actualizado a: {nuevo_estado}"})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al actualizar venta: {str(e)}"}), 500
@@ -724,23 +546,16 @@ def api_backoffice_actualizar_base():
         nuevo_estado = str(data.get("estado", "")).strip().upper()
         asignado_a = str(data.get("asignado_a", "")).strip()
 
-        if fila < 2 or not nuevo_estado:
-            return jsonify({"ok": False, "msg": "Fila o estado inválido."}), 400
-
-        if nuevo_estado == "LIBRE":
-            asignado_a = ""
+        if fila < 2 or not nuevo_estado: return jsonify({"ok": False, "msg": "Fila o estado inválido."}), 400
+        if nuevo_estado == "LIBRE": asignado_a = ""
 
         sh = get_spreadsheet()
         ws_base = get_or_create_base_sheet(sh)
         ws_base.update(f"I{fila}:J{fila}", [[nuevo_estado, asignado_a]])
-
         return jsonify({"ok": True, "msg": f"Registro de base actualizado a {nuevo_estado}."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al actualizar BASE DE DATOS: {str(e)}"}), 500
 
-# ==========================================================
-# API POST-VENTA (/api/ventas)
-# ==========================================================
 @app.route("/api/ventas", methods=["GET"])
 @login_required
 def api_get_ventas_postventa():
@@ -754,19 +569,12 @@ def api_get_ventas_postventa():
             monto_com = 69 if "600" in plan_str else 59
             est_bo = str(v.get("ESTADO", "PENDIENTE VALIDACIÓN"))
             data_out.append({
-                "_fila": idx,
-                "ID_VENTA": v.get("ID_VENTA", f"V{1000+idx-1}"),
-                "CLIENTE_NOMBRE": v.get("CLIENTE", ""),
-                "CORREO": v.get("CORREO", ""),
-                "ASESOR_CAMPO": v.get("ASESOR", ""),
-                "PLAN_PRODUCTO": plan_str,
+                "_fila": idx, "ID_VENTA": v.get("ID_VENTA", f"V{1000+idx-1}"), "CLIENTE_NOMBRE": v.get("CLIENTE", ""),
+                "CORREO": v.get("CORREO", ""), "ASESOR_CAMPO": v.get("ASESOR", ""), "PLAN_PRODUCTO": plan_str,
                 "ESTADO_INSTALACION": "Instalado" if ("INSTALADO" in est_bo.upper() or "ACTIVADO" in est_bo.upper()) else est_bo,
-                "NUMERO_RECIBO_CLIENTE": v.get("NUMERO_RECIBO_CLIENTE", ""),
-                "FECHA_VENCIMIENTO_RECIBO": v.get("FECHA_VENCIMIENTO_RECIBO", ""),
-                "ESTADO_PAGO_CLIENTE": v.get("ESTADO_PAGO_CLIENTE") or "Pendiente",
-                "ESTADO_COMISION": v.get("ESTADO_COMISION") or "Pendiente instalación",
-                "FECHA_PAGO_COMISION": v.get("FECHA_PAGO_COMISION", ""),
-                "MONTO_COMISION": monto_com
+                "NUMERO_RECIBO_CLIENTE": v.get("NUMERO_RECIBO_CLIENTE", ""), "FECHA_VENCIMIENTO_RECIBO": v.get("FECHA_VENCIMIENTO_RECIBO", ""),
+                "ESTADO_PAGO_CLIENTE": v.get("ESTADO_PAGO_CLIENTE") or "Pendiente", "ESTADO_COMISION": v.get("ESTADO_COMISION") or "Pendiente instalación",
+                "FECHA_PAGO_COMISION": v.get("FECHA_PAGO_COMISION", ""), "MONTO_COMISION": monto_com
             })
         return jsonify({"status": "success", "data": data_out})
     except Exception as e:
@@ -785,14 +593,11 @@ def api_patch_venta_postventa(id_venta):
             if str(r.get("ID_VENTA", "")).strip() == str(id_venta).strip():
                 fila_encontrada = idx
                 break
-        if not fila_encontrada:
-            return jsonify({"status": "error", "message": "Venta no encontrada"}), 404
+        if not fila_encontrada: return jsonify({"status": "error", "message": "Venta no encontrada"}), 404
 
         valores_pv = [[
-            str(payload.get("numero_recibo", "")).strip(),
-            str(payload.get("fecha_vencimiento_recibo", "")).strip(),
-            str(payload.get("estado_pago_cliente", "Pendiente")).strip(),
-            str(payload.get("estado_comision", "Pendiente instalación")).strip(),
+            str(payload.get("numero_recibo", "")).strip(), str(payload.get("fecha_vencimiento_recibo", "")).strip(),
+            str(payload.get("estado_pago_cliente", "Pendiente")).strip(), str(payload.get("estado_comision", "Pendiente instalación")).strip(),
             str(payload.get("fecha_pago_comision", "")).strip()
         ]]
         ws_ventas.update(f"P{fila_encontrada}:T{fila_encontrada}", valores_pv)
@@ -800,15 +605,10 @@ def api_patch_venta_postventa(id_venta):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ==========================================================
-# API EXCLUSIVA DE ADMIN: CREAR Y GESTIONAR USUARIOS
-# ==========================================================
 @app.route("/api/admin/crear_usuario", methods=["POST"])
 @login_required
 def api_admin_crear_usuario():
-    if session.get("rol") != "ADMIN":
-        return jsonify({"ok": False, "msg": "No autorizado. Solo ADMIN puede crear usuarios."}), 403
-
+    if session.get("rol") != "ADMIN": return jsonify({"ok": False, "msg": "No autorizado. Solo ADMIN puede crear usuarios."}), 403
     try:
         data = request.get_json() or {}
         nombre_completo = str(data.get("nombre_completo", "")).strip().upper()
@@ -830,23 +630,15 @@ def api_admin_crear_usuario():
 
         nuevo_num = len(existentes) + 1
         id_usuario = f"U-{nuevo_num:03d}"
-
-        nueva_fila = [id_usuario, nombre_completo, usuario_login, password_login, rol_nuevo, estado_nuevo]
-        ws_usuarios.append_row(nueva_fila, value_input_option="USER_ENTERED")
-
-        return jsonify({
-            "ok": True,
-            "msg": f"Usuario {nombre_completo} ({id_usuario}) creado exitosamente en la hoja Usuarios."
-        })
+        ws_usuarios.append_row([id_usuario, nombre_completo, usuario_login, password_login, rol_nuevo, estado_nuevo], value_input_option="USER_ENTERED")
+        return jsonify({"ok": True, "msg": f"Usuario {nombre_completo} ({id_usuario}) creado exitosamente en la hoja Usuarios."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al crear usuario: {str(e)}"}), 500
 
 @app.route("/api/admin/actualizar_usuario", methods=["POST"])
 @login_required
 def api_admin_actualizar_usuario():
-    if session.get("rol") != "ADMIN":
-        return jsonify({"ok": False, "msg": "Solo ADMIN puede modificar usuarios."}), 403
-
+    if session.get("rol") != "ADMIN": return jsonify({"ok": False, "msg": "Solo ADMIN puede modificar usuarios."}), 403
     try:
         data = request.get_json() or {}
         fila = int(data.get("fila", 0))
@@ -854,17 +646,14 @@ def api_admin_actualizar_usuario():
         rol_nuevo = str(data.get("rol", "VENTAS")).strip().upper()
         estado_nuevo = str(data.get("estado", "Activo")).strip()
 
-        if fila < 2:
-            return jsonify({"ok": False, "msg": "Fila de usuario inválida."}), 400
+        if fila < 2: return jsonify({"ok": False, "msg": "Fila de usuario inválida."}), 400
 
         sh = get_spreadsheet()
         ws_usuarios = get_or_create_usuarios_sheet(sh)
         ws_usuarios.update(f"D{fila}:F{fila}", [[password_nuevo, rol_nuevo, estado_nuevo]])
-
         return jsonify({"ok": True, "msg": "Usuario actualizado correctamente."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al actualizar usuario: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
