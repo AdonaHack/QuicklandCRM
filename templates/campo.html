@@ -385,10 +385,7 @@
           <span class="mono" id="idRegLabel" style="color:var(--muted);font-weight:700;"></span>
         </div>
         <div id="contenedorRegistro">
-          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
-            <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
-            <button type="button" class="btn-submit" onclick="solicitarRegistro()" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
-          </div>
+          <!-- Aquí se renderiza el cliente o el botón manual -->
         </div>
       </div>
 
@@ -539,7 +536,7 @@ let selCont = null;
 let selSub = null;
 let cupoMax = 150;
 let usadosHoy = 0;
-let isAutoNexting = false; 
+let justSavedId = null;
 
 function mananaISO() {
   return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -553,9 +550,16 @@ async function cargarTodoCampo() {
 
     if (data.usuario) $("nombreAsesorHeader").textContent = `Asesor: ${data.usuario}`;
     
-    // Si estamos en proceso de auto-next, ignoramos el asignado que nos manda Sheets porque es el viejo
-    if (!isAutoNexting) {
-        working = data.asignado;
+    // Ignoramos el cliente si acaba de ser tipificado y Sheets nos lo manda por la latencia
+    if (data.asignado) {
+        if (data.asignado.ID === justSavedId) {
+            working = null; 
+        } else {
+            working = data.asignado;
+            justSavedId = null;
+        }
+    } else {
+        working = null;
     }
 
     misCuentas = data.mis_cuentas || [];
@@ -564,17 +568,7 @@ async function cargarTodoCampo() {
     usadosHoy = data.usados || 0;
 
     renderMisVentasKPIs();
-    
-    if (!isAutoNexting) {
-        renderBase();
-    } else {
-        // Solo actualizamos los contadores de la derecha sin tocar la pantalla principal
-        $("cupoTexto").textContent = `${usadosHoy}/${cupoMax}`;
-        $("cupoBarra").style.width = `${Math.min(100, (usadosHoy / cupoMax) * 100)}%`;
-        $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
-        $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
-        renderListaCuentas();
-    }
+    renderBase();
   } catch (e) {}
 }
 
@@ -626,25 +620,28 @@ function renderMisVentasKPIs() {
 }
 
 async function solicitarRegistro() {
-  const btn = $("btnReq");
-  if (btn) { btn.disabled = true; btn.textContent = "Asignando cliente..."; }
+  const btn = document.getElementById("btnReqNext") || document.getElementById("btnReq");
+  if (btn) { btn.disabled = true; btn.textContent = "Buscando cliente..."; }
   try {
     const res = await fetch("/api/campo/solicitar_registro", { method: "POST" });
     const data = await res.json();
+    
     if (!data.ok) {
       toast(data.msg);
-      if (data.registro) { working = data.registro; renderBase(); }
-      else if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
+      // Si dio error por latencia de Google Sheets, habilitamos el botón para que el usuario pueda reintentar manualmente
+      if (btn) { btn.disabled = false; btn.textContent = "⚡ Pedir otro cliente (Reintentar)"; }
       return;
     }
+
     working = data.registro;
+    justSavedId = null; 
     usadosHoy++;
     selCont = null;
     selSub = null;
     renderBase();
   } catch (err) {
     toast("No se pudo solicitar el registro.");
-    if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
+    if (btn) { btn.disabled = false; btn.textContent = "⚡ Pedir otro cliente (Reintentar)"; }
   }
 }
 
@@ -654,7 +651,6 @@ function retipificarCuenta(idRegistro) {
     working = cuenta;
     selCont = null;
     selSub = null;
-    isAutoNexting = false;
     renderBase();
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
     toast("Registro cargado. Puedes volver a tipificar.");
@@ -695,53 +691,26 @@ async function guardarTipificacion() {
     }
     toast(data.msg);
 
-    // SISTEMA ROBUSTO AUTO-NEXT
-    isAutoNexting = true;
-    working = null; selCont = null; selSub = null;
+    // Registramos el ID guardado para evadir el caché
+    justSavedId = working.ID;
     
+    // Limpiamos pantalla
+    working = null; selCont = null; selSub = null;
+
+    // RENDERIZAMOS EL BOTÓN MANUAL "PEDIR OTRO CLIENTE"
     const cont = $("contenedorRegistro");
     if (cont) {
         cont.innerHTML = `
-          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:40px 16px;text-align:center;">
-            <p style="color:var(--primary); font-weight:800; font-size:1.1rem; margin-bottom:8px;">✅ ¡Guardado con éxito!</p>
-            <p style="color:var(--muted); font-size:0.9rem;">Buscando el siguiente cliente automáticamente...</p>
+          <div style="border:2px dashed #16a34a;border-radius:14px;padding:32px 16px;text-align:center;background:#f0fdf4;">
+            <p style="color:#166534; font-weight:800; font-size:1.15rem; margin-bottom:16px;">✅ ¡Tipificación guardada exitosamente!</p>
+            <button type="button" class="btn-submit" id="btnReqNext" onclick="solicitarRegistro()" style="max-width:310px;margin:0 auto;background:#1d5dec;">
+              ⚡ Pedir otro cliente de la Base
+            </button>
           </div>`;
     }
 
-    // Polling: intenta pedir un nuevo cliente (esquivando el caché de Google Sheets)
-    const tryGetNext = async (attempts = 0) => {
-        if (attempts > 3) {
-            // Si después de varios reintentos sigue fallando, restablece la UI
-            isAutoNexting = false;
-            await cargarTodoCampo();
-            return;
-        }
-        try {
-            const req = await fetch("/api/campo/solicitar_registro", { method: "POST" });
-            const reqData = await req.json();
-            if (!reqData.ok) {
-                if (reqData.msg.includes("Primero tipifica")) {
-                    // Google Sheets sigue lento, esperamos 2 segundos y reintentamos
-                    setTimeout(() => tryGetNext(attempts + 1), 2000);
-                } else {
-                    isAutoNexting = false;
-                    toast(reqData.msg);
-                    await cargarTodoCampo();
-                }
-            } else {
-                // Éxito: Google Sheets ya nos entregó un cliente nuevo
-                isAutoNexting = false;
-                working = reqData.registro;
-                await cargarTodoCampo();
-            }
-        } catch (e) {
-            isAutoNexting = false;
-            await cargarTodoCampo();
-        }
-    };
-
-    // Empieza a pedir el siguiente cliente después de 1.5 segundos
-    setTimeout(() => tryGetNext(0), 1500);
+    // Actualizamos los números de la barra lateral de fondo (silenciosamente)
+    cargarTodoCampo();
 
   } catch (e) {
     toast("Error de conexión al guardar.");
@@ -749,7 +718,13 @@ async function guardarTipificacion() {
   }
 }
 
-function renderListaCuentas() {
+function renderBase() {
+  $("cupoTexto").textContent = `${usadosHoy}/${cupoMax}`;
+  $("cupoBarra").style.width = `${Math.min(100, (usadosHoy / cupoMax) * 100)}%`;
+  $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
+  $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
+
+  // Renderiza las tarjetas de Cartera
   const lista = $("contenedorMisCuentas");
   if (!misCuentas.length) {
     lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
@@ -769,21 +744,14 @@ function renderListaCuentas() {
       </div>
     `).join("");
   }
-}
 
-function renderBase() {
-  $("cupoTexto").textContent = `${usadosHoy}/${cupoMax}`;
-  $("cupoBarra").style.width = `${Math.min(100, (usadosHoy / cupoMax) * 100)}%`;
-  $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
-  $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
-
-  renderListaCuentas();
-
+  // Renderiza el Área Principal
   const cont = $("contenedorRegistro");
   const r = working;
 
   if (!r) {
-    if (!isAutoNexting) {
+    // Si NO hay registro trabajando pero acabamos de guardar, no hacemos nada porque el html del éxito ya se dibujó en guardarTipificacion()
+    if (!justSavedId) {
         $("tituloPanelReg").textContent = "Registro asignado";
         $("idRegLabel").textContent = "";
         cont.innerHTML = `
