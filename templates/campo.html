@@ -539,7 +539,7 @@ let selCont = null;
 let selSub = null;
 let cupoMax = 150;
 let usadosHoy = 0;
-let justSavedId = null; // Guardamos el ID que acabamos de tipificar para que no nos lo devuelva por error de caché de Google Sheets
+let isAutoNexting = false; 
 
 function mananaISO() {
   return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -551,20 +551,11 @@ async function cargarTodoCampo() {
     const data = await res.json();
     if (!data.ok) return;
 
-    if (data.usuario) {
-      $("nombreAsesorHeader").textContent = `Asesor: ${data.usuario}`;
-    }
-
-    // Filtro anti-latencia: si Google Sheets nos devuelve el mismo cliente que acabamos de tipificar, lo ignoramos.
-    if (data.asignado) {
-        if (data.asignado.ID === justSavedId) {
-            working = null; 
-        } else {
-            working = data.asignado;
-            justSavedId = null;
-        }
-    } else {
-        working = null;
+    if (data.usuario) $("nombreAsesorHeader").textContent = `Asesor: ${data.usuario}`;
+    
+    // Si estamos en proceso de auto-next, ignoramos el asignado que nos manda Sheets porque es el viejo
+    if (!isAutoNexting) {
+        working = data.asignado;
     }
 
     misCuentas = data.mis_cuentas || [];
@@ -573,16 +564,23 @@ async function cargarTodoCampo() {
     usadosHoy = data.usados || 0;
 
     renderMisVentasKPIs();
-    renderBase();
+    
+    if (!isAutoNexting) {
+        renderBase();
+    } else {
+        // Solo actualizamos los contadores de la derecha sin tocar la pantalla principal
+        $("cupoTexto").textContent = `${usadosHoy}/${cupoMax}`;
+        $("cupoBarra").style.width = `${Math.min(100, (usadosHoy / cupoMax) * 100)}%`;
+        $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
+        $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
+        renderListaCuentas();
+    }
   } catch (e) {}
 }
 
 function renderMisVentasKPIs() {
   $("lblMisVentasCount").textContent = `Mis Ventas (${misVentasLista.length})`;
-
-  let instaladas = 0;
-  let comision = 0;
-
+  let instaladas = 0; let comision = 0;
   misVentasLista.forEach(v => {
     const est = String(v.ESTADO || v.Estado || "").toUpperCase();
     if (est.includes("INSTALADO") || est.includes("ACTIVADO")) {
@@ -591,7 +589,6 @@ function renderMisVentasKPIs() {
       comision += planStr.includes("600") ? 69 : 59;
     }
   });
-
   $("kpiExitosas").textContent = instaladas;
   $("kpiComision").textContent = `S/ ${comision.toFixed(2)}`;
 
@@ -600,20 +597,12 @@ function renderMisVentasKPIs() {
     cont.innerHTML = `<p style="text-align:center;color:var(--muted);padding:24px 0;margin:0;">Aún no tienes ventas registradas.</p>`;
     return;
   }
-
   cont.innerHTML = `
     <div class="tbl">
       <table>
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Fecha</th>
-            <th>Cliente</th>
-            <th>DNI / RUC</th>
-            <th>Correo</th>
-            <th>Plan</th>
-            <th>Estado Back Office</th>
-            <th>Comentario Back</th>
+            <th>ID</th><th>Fecha</th><th>Cliente</th><th>DNI / RUC</th><th>Correo</th><th>Plan</th><th>Estado Back Office</th><th>Comentario Back</th>
           </tr>
         </thead>
         <tbody>
@@ -625,49 +614,30 @@ function renderMisVentasKPIs() {
             else if (est.includes("OBSERVADO")) cls = "p-gest";
             return `
               <tr>
-                <td class="mono"><b>${esc(v.ID_VENTA || "—")}</b></td>
-                <td class="mono">${esc(v.FECHA || v.Fecha || "—")}</td>
-                <td><b>${esc(v.CLIENTE || v.Cliente || "—")}</b></td>
-                <td class="mono">${esc(v.DNI_RUC || "—")}</td>
-                <td>${esc(v.CORREO || "—")}</td>
-                <td>${esc(v.PLAN || v.Plan || "—")}</td>
-                <td><span class="pill ${cls}">${esc(est)}</span></td>
-                <td style="color:var(--muted);">${esc(v.COMENTARIO_BACK || "—")}</td>
-              </tr>
-            `;
+                <td class="mono"><b>${esc(v.ID_VENTA || "—")}</b></td><td class="mono">${esc(v.FECHA || v.Fecha || "—")}</td>
+                <td><b>${esc(v.CLIENTE || v.Cliente || "—")}</b></td><td class="mono">${esc(v.DNI_RUC || "—")}</td>
+                <td>${esc(v.CORREO || "—")}</td><td>${esc(v.PLAN || v.Plan || "—")}</td>
+                <td><span class="pill ${cls}">${esc(est)}</span></td><td style="color:var(--muted);">${esc(v.COMENTARIO_BACK || "—")}</td>
+              </tr>`;
           }).join("")}
         </tbody>
       </table>
-    </div>
-  `;
+    </div>`;
 }
 
-async function solicitarRegistro(isAutoNext = false) {
+async function solicitarRegistro() {
   const btn = $("btnReq");
   if (btn) { btn.disabled = true; btn.textContent = "Asignando cliente..."; }
   try {
     const res = await fetch("/api/campo/solicitar_registro", { method: "POST" });
     const data = await res.json();
-    
     if (!data.ok) {
-      // Si falla porque Google Sheets aún no actualiza el estado ("Primero tipifica..."), reintentamos silenciosamente en 2s
-      if (data.msg.includes("Primero tipifica") && isAutoNext) {
-          setTimeout(() => solicitarRegistro(false), 2000);
-          return;
-      }
       toast(data.msg);
-      if (data.registro && data.registro.ID !== justSavedId) { 
-          working = data.registro; 
-          renderBase(); 
-      } else {
-          working = null;
-          renderBase();
-      }
+      if (data.registro) { working = data.registro; renderBase(); }
+      else if (btn) { btn.disabled = false; btn.textContent = "⚡ Solicitar registro de BASE DE DATOS"; }
       return;
     }
-
     working = data.registro;
-    justSavedId = null; 
     usadosHoy++;
     selCont = null;
     selSub = null;
@@ -684,6 +654,7 @@ function retipificarCuenta(idRegistro) {
     working = cuenta;
     selCont = null;
     selSub = null;
+    isAutoNexting = false;
     renderBase();
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
     toast("Registro cargado. Puedes volver a tipificar.");
@@ -697,9 +668,7 @@ async function guardarTipificacion() {
   const dirVenta = $("dirVenta") ? $("dirVenta").value.trim() : "";
   const correoVenta = $("correoVenta") ? $("correoVenta").value.trim() : "";
 
-  if (selSub === "Cl indica llamar nuevamente" && !agenda) {
-    return toast("Indica la fecha para volver a llamar.");
-  }
+  if (selSub === "Cl indica llamar nuevamente" && !agenda) return toast("Indica la fecha para volver a llamar.");
 
   let tipifEnvio = selSub;
   if (selSub.startsWith("Venta")) {
@@ -712,17 +681,11 @@ async function guardarTipificacion() {
 
   try {
     const res = await fetch("/api/campo/tipificar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: working.ID,
-        fila: working._fila,
-        tipificacion: tipifEnvio,
-        plan_elegido: selSub,
+        id: working.ID, fila: working._fila, tipificacion: tipifEnvio, plan_elegido: selSub,
         observaciones: selSub.startsWith("Venta") ? `[${selSub}] ${obs}`.trim() : obs,
-        fecha_agenda: agenda,
-        direccion: dirVenta,
-        correo: correoVenta
+        fecha_agenda: agenda, direccion: dirVenta, correo: correoVenta
       })
     });
     const data = await res.json();
@@ -730,18 +693,12 @@ async function guardarTipificacion() {
       if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
       return toast(data.msg);
     }
-
     toast(data.msg);
 
-    // Marcamos este ID como "guardado" para que el caché de Google Sheets no nos engañe
-    justSavedId = working.ID;
+    // SISTEMA ROBUSTO AUTO-NEXT
+    isAutoNexting = true;
+    working = null; selCont = null; selSub = null;
     
-    // Limpiamos pantalla de inmediato
-    working = null;
-    selCont = null;
-    selSub = null;
-
-    // Efecto visual: Auto-Next (Buscando cliente automáticamente)
     const cont = $("contenedorRegistro");
     if (cont) {
         cont.innerHTML = `
@@ -751,15 +708,66 @@ async function guardarTipificacion() {
           </div>`;
     }
 
-    // Esperamos 2.5 segundos para que Google Sheets procese y pedimos uno nuevo
-    setTimeout(() => {
-        solicitarRegistro(true); 
-        cargarTodoCampo(); // Actualiza los contadores de la derecha sin re-asignar el viejo
-    }, 2500);
+    // Polling: intenta pedir un nuevo cliente (esquivando el caché de Google Sheets)
+    const tryGetNext = async (attempts = 0) => {
+        if (attempts > 3) {
+            // Si después de varios reintentos sigue fallando, restablece la UI
+            isAutoNexting = false;
+            await cargarTodoCampo();
+            return;
+        }
+        try {
+            const req = await fetch("/api/campo/solicitar_registro", { method: "POST" });
+            const reqData = await req.json();
+            if (!reqData.ok) {
+                if (reqData.msg.includes("Primero tipifica")) {
+                    // Google Sheets sigue lento, esperamos 2 segundos y reintentamos
+                    setTimeout(() => tryGetNext(attempts + 1), 2000);
+                } else {
+                    isAutoNexting = false;
+                    toast(reqData.msg);
+                    await cargarTodoCampo();
+                }
+            } else {
+                // Éxito: Google Sheets ya nos entregó un cliente nuevo
+                isAutoNexting = false;
+                working = reqData.registro;
+                await cargarTodoCampo();
+            }
+        } catch (e) {
+            isAutoNexting = false;
+            await cargarTodoCampo();
+        }
+    };
+
+    // Empieza a pedir el siguiente cliente después de 1.5 segundos
+    setTimeout(() => tryGetNext(0), 1500);
 
   } catch (e) {
     toast("Error de conexión al guardar.");
     if (btn) { btn.disabled = false; btn.textContent = "Guardar Tipificación"; }
+  }
+}
+
+function renderListaCuentas() {
+  const lista = $("contenedorMisCuentas");
+  if (!misCuentas.length) {
+    lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
+  } else {
+    lista.innerHTML = misCuentas.map(c => `
+      <div class="cuenta-item" style="flex-wrap: wrap; gap: 8px;">
+        <div style="flex: 1; min-width: 180px;">
+          <div style="font-weight:700; font-size:0.9rem;">${esc(c.RAZON_SOCIAL && c.RAZON_SOCIAL !== "—" ? c.RAZON_SOCIAL : c.NOMBRE)}</div>
+          <div style="font-size:0.8rem;color:var(--muted); margin-top:2px;">${esc(c.RUC || c.DNI)} · ${esc(c.ULT_TIPIFICACION || "Sin tipificación")}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          <span class="pill p-asig" style="font-size:0.65rem;">${esc(c.ESTADO)}</span>
+          <button type="button" class="btn-submit" style="padding: 5px 12px; font-size: 0.75rem; border-radius: 8px; width: auto; box-shadow: none; background: var(--primary-dark);" onclick="retipificarCuenta('${esc(c.ID)}')">
+            ✏️ Gestionar
+          </button>
+        </div>
+      </div>
+    `).join("");
   }
 }
 
@@ -769,20 +777,21 @@ function renderBase() {
   $("resumenHoy").textContent = `${misCuentas.length} cuentas activas en seguimiento`;
   $("totalMisCuentas").textContent = `${misCuentas.length} activas`;
 
+  renderListaCuentas();
+
   const cont = $("contenedorRegistro");
   const r = working;
 
   if (!r) {
-    // Si no hay registro activo, pero justSavedId existe, significa que está en la pausa del Siguiente Automático
-    if (!justSavedId) {
-      $("tituloPanelReg").textContent = "Registro asignado";
-      $("idRegLabel").textContent = "";
-      cont.innerHTML = `
-        <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
-          <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
-          <button type="button" class="btn-submit" id="btnReq" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
-        </div>`;
-      $("btnReq").onclick = solicitarRegistro;
+    if (!isAutoNexting) {
+        $("tituloPanelReg").textContent = "Registro asignado";
+        $("idRegLabel").textContent = "";
+        cont.innerHTML = `
+          <div style="border:2px dashed #cbd5e1;border-radius:14px;padding:32px 16px;text-align:center;">
+            <p style="margin:0 0 14px;color:var(--muted);">No tienes un registro asignado en este momento.</p>
+            <button type="button" class="btn-submit" id="btnReq" style="max-width:310px;margin:0 auto;">⚡ Solicitar registro de BASE DE DATOS</button>
+          </div>`;
+        $("btnReq").onclick = solicitarRegistro;
     }
   } else {
     $("idRegLabel").textContent = r.ID || "";
@@ -846,26 +855,6 @@ function renderBase() {
     cont.querySelectorAll("[data-cont]").forEach(b => b.onclick = () => { selCont = b.dataset.cont; selSub = null; renderBase(); });
     cont.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { selSub = b.dataset.sub; renderBase(); });
     $("btnSave").onclick = guardarTipificacion;
-  }
-
-  const lista = $("contenedorMisCuentas");
-  if (!misCuentas.length) {
-    lista.innerHTML = `<p style="font-size:0.84rem;color:var(--muted);margin:0;">Aquí aparecen tus ventas, interesados y agendados.</p>`;
-  } else {
-    lista.innerHTML = misCuentas.map(c => `
-      <div class="cuenta-item" style="flex-wrap: wrap; gap: 8px;">
-        <div style="flex: 1; min-width: 180px;">
-          <div style="font-weight:700; font-size:0.9rem;">${esc(c.RAZON_SOCIAL && c.RAZON_SOCIAL !== "—" ? c.RAZON_SOCIAL : c.NOMBRE)}</div>
-          <div style="font-size:0.8rem;color:var(--muted); margin-top:2px;">${esc(c.RUC || c.DNI)} · ${esc(c.ULT_TIPIFICACION || "Sin tipificación")}</div>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-          <span class="pill p-asig" style="font-size:0.65rem;">${esc(c.ESTADO)}</span>
-          <button type="button" class="btn-submit" style="padding: 5px 12px; font-size: 0.75rem; border-radius: 8px; width: auto; box-shadow: none; background: var(--primary-dark);" onclick="retipificarCuenta('${esc(c.ID)}')">
-            ✏️ Gestionar
-          </button>
-        </div>
-      </div>
-    `).join("");
   }
 }
 
