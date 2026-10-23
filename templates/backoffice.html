@@ -153,7 +153,7 @@
           <option value="OBSERVADO">⚠️ OBSERVADO</option>
           <option value="RECHAZADO">🚫 RECHAZADO</option>
         </select>
-        <input type="search" id="buscarVenta" placeholder="🔍 Buscar RUC, DNI, cliente, correo o ejecutivo..." oninput="renderVentas()" style="min-width:280px;flex:1;">
+        <input type="search" id="buscarVenta" placeholder="🔍 Buscar RUC, DNI, cliente o ejecutivo..." oninput="renderVentas()" style="min-width:280px;flex:1;">
       </div>
 
       <div class="tbl">
@@ -167,7 +167,6 @@
               <th>DNI / RUC</th>
               <th>Cliente / Razón Social</th>
               <th>Celular</th>
-              <th>Correo</th>
               <th>Distrito / Dirección</th>
               <th>Plan</th>
               <th>Obs. Ejecutivo</th>
@@ -189,7 +188,7 @@
     <section class="panel">
       <h2>
         <span>📈 Cuánto van Gestionando los Ejecutivos de Ventas</span>
-        <small id="cupoLabel">Cupo diario por asesor: 150</small>
+        <small id="cupoLabel">Cupo diario por asesor: 40</small>
       </h2>
       <div class="tbl">
         <table>
@@ -263,7 +262,7 @@
 let listaVentas = [];
 let listaBase = [];
 let listaEjecutivos = [];
-let cupoDiario = 150;
+let cupoDiario = 40;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -285,8 +284,7 @@ async function cargarDatosBack() {
     listaVentas = data.ventas || [];
     listaBase = data.base || [];
     listaEjecutivos = data.ejecutivos || [];
-    cupoDiario = data.cupo_max || 150;
-    if ($("cupoLabel")) $("cupoLabel").textContent = `Cupo diario por asesor: ${cupoDiario}`;
+    cupoDiario = data.cupo_max || 40;
 
     renderVentas();
     renderBaseBack();
@@ -308,14 +306,14 @@ function renderVentas() {
   const filtradas = listaVentas.filter(v => {
     const est = String(v.ESTADO || "PENDIENTE VALIDACIÓN").toUpperCase();
     const okEst = fEst === "TODOS" || est === fEst;
-    const texto = [v.ID_VENTA, v.ASESOR, v.DNI_RUC, v.CLIENTE, v.CELULAR, v.CORREO, v.DISTRITO, v.PLAN].join(" ").toLowerCase();
+    const texto = [v.ID_VENTA, v.ASESOR, v.DNI_RUC, v.CLIENTE, v.CELULAR, v.DISTRITO, v.PLAN].join(" ").toLowerCase();
     return okEst && (!q || texto.includes(q));
   });
 
   $("contadorVentas").textContent = `${filtradas.length} de ${listaVentas.length} ventas`;
 
   if (!filtradas.length) {
-    $("tbodyVentas").innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:28px;">No hay ventas registradas con ese filtro.</td></tr>`;
+    $("tbodyVentas").innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:28px;">No hay ventas registradas con ese filtro.</td></tr>`;
     return;
   }
 
@@ -332,7 +330,6 @@ function renderVentas() {
         <td class="mono">${esc(v.DNI_RUC)}</td>
         <td><b>${esc(v.CLIENTE)}</b></td>
         <td class="mono">${esc(v.CELULAR)}</td>
-        <td>${esc(v.CORREO || "—")}</td>
         <td>${esc(v.DISTRITO)}${v.DIRECCION ? `<br><small style="color:var(--muted)">📍 ${esc(v.DIRECCION)}</small>` : ""}</td>
         <td><span class="pill p-vend">${esc(v.PLAN)}</span></td>
         <td class="obs">${esc(v.OBSERVACIONES || "—")}</td>
