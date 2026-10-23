@@ -62,7 +62,6 @@ def get_or_create_base_sheet(sh):
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title="BASE DE DATOS", rows="1000", cols="20")
     
-    # AUTO-REPARACIÓN DE COLUMNAS PARA BASE DE DATOS (Alineado con tu Excel actual)
     primera_fila = ws.row_values(1)
     encabezados = [
         "ID", "TIPO", "RUC", "RAZON_SOCIAL", "DNI", "NOMBRE",
@@ -70,17 +69,8 @@ def get_or_create_base_sheet(sh):
         "INTENTOS", "ULT_TIPIFICACION", "FECHA_AGENDA", "FECHA_VENCE",
         "DISPONIBLE_DESDE", "MOTIVO_OBSERVACION"
     ]
-    
-    # Comprobamos si la columna ESTADO está en la posición J (índice 9) en tu Excel
-    if len(primera_fila) > 9 and "ESTADO" in str(primera_fila[9]).upper():
-        pass # La estructura de tu Excel es ligeramente diferente pero la manejaremos dinámicamente
-    elif primera_fila[:17] != encabezados:
-        if ws.col_count < 17:
-            ws.add_cols(17 - ws.col_count)
-        # Solo reescribimos si está totalmente vacía o muy desordenada, para no borrar tus datos
-        if len(primera_fila) < 5:
-            ws.update("A1:Q1", [encabezados])
-            
+    if not primera_fila:
+        ws.update("A1:Q1", [encabezados])
     return ws
 
 def get_or_create_ventas_sheet(sh):
@@ -241,6 +231,60 @@ def api_registrar_venta():
         return jsonify({"ok": False, "msg": f"Error al registrar venta: {str(e)}"}), 500
 
 # ==========================================================
+# FUNCIÓN INTERNA PARA ELEGIR Y ASIGNAR UN NUEVO CLIENTE LIBRE
+# ==========================================================
+def asignar_nuevo_cliente_libre(ws, registros, identificadores, nombre):
+    hoy_str = datetime.now().strftime("%Y-%m-%d")
+    pool_virgen = []
+    pool_reintento = []
+
+    for idx, r in enumerate(registros, start=2):
+        tiene_datos = any([r.get("RUC"), r.get("DNI"), r.get("RAZON_SOCIAL"), r.get("NOMBRE"), r.get("CELULAR")])
+        if not tiene_datos:
+            continue
+
+        estado = str(r.get("ESTADO") or "").strip().upper()
+        asig = str(r.get("ASIGNADO_A") or "").strip()
+        ult_user = str(r.get("ULT_USUARIO") or "").strip().lower()
+        ult_tipif = str(r.get("ULT_TIPIFICACION") or "").strip()
+        disp = str(r.get("DISPONIBLE_DESDE") or "").strip()
+
+        # Ignorar registros ya asignados a alguien o vendidos/excluidos/en gestión
+        if estado in ["ASIGNADO", "VENDIDO", "EXCLUIDO", "BLOQUEADO", "EN GESTIÓN", "AGENDADO"]:
+            continue
+        if asig != "":
+            continue
+
+        # Es un registro LIBRE (o con celda ESTADO en blanco)
+        if ult_user not in identificadores:
+            if not disp or disp <= hoy_str:
+                r_copy = dict(r)
+                r_copy["_fila"] = idx
+                # Garantizar ID único basado en el número de fila real
+                id_unico = f"B{1000 + idx - 1}"
+                r_copy["ID"] = id_unico
+                if not ult_tipif:
+                    pool_virgen.append(r_copy)
+                else:
+                    pool_reintento.append(r_copy)
+
+    # Priorizar los clientes que tienen la columna M (ULT_TIPIFICACION) totalmente vacía
+    pool = pool_virgen if pool_virgen else pool_reintento
+    if not pool:
+        return None
+
+    elegido = random.choice(pool)
+    fila = elegido["_fila"]
+
+    ws.batch_update([
+        {"range": f"A{fila}", "values": [[elegido["ID"]]]},
+        {"range": f"I{fila}:J{fila}", "values": [["ASIGNADO", nombre]]}
+    ])
+    elegido["ESTADO"] = "ASIGNADO"
+    elegido["ASIGNADO_A"] = nombre
+    return elegido
+
+# ==========================================================
 # API CAMPO: GESTIÓN DE HOJA 'BASE DE DATOS' Y MIS VENTAS
 # ==========================================================
 @app.route("/api/campo/mi_base", methods=["GET"])
@@ -262,11 +306,11 @@ def api_campo_mi_base():
 
         for idx, r in enumerate(registros, start=2):
             r["_fila"] = idx
-            
-            # Buscar el estado en las diferentes posibles columnas
-            estado = str(r.get("ESTADO") or r.get("Estado") or "").strip().upper()
-            asig = str(r.get("ASIGNADO_A") or r.get("Asignado_a") or r.get("ASIGNADO A") or "").strip()
-            ult_u = str(r.get("ULT_USUARIO") or r.get("Ult_Usuario") or "").strip()
+            if not r.get("ID"):
+                r["ID"] = f"B{1000 + idx - 1}"
+            estado = str(r.get("ESTADO") or "").strip().upper()
+            asig = str(r.get("ASIGNADO_A") or "").strip()
+            ult_u = str(r.get("ULT_USUARIO") or "").strip()
 
             if asig.lower() in identificadores:
                 usados_hoy += 1
@@ -287,7 +331,15 @@ def api_campo_mi_base():
         except Exception:
             pass
 
-        return jsonify({"ok": True, "usuario": nombre, "asignado": asignado_actual, "mis_cuentas": mis_cuentas, "mis_ventas": mis_ventas, "usados": usados_hoy, "cupo_max": CFG_BASE["cupo"]})
+        return jsonify({
+            "ok": True,
+            "usuario": nombre,
+            "asignado": asignado_actual,
+            "mis_cuentas": mis_cuentas,
+            "mis_ventas": mis_ventas,
+            "usados": usados_hoy,
+            "cupo_max": CFG_BASE["cupo"]
+        })
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al leer BASE DE DATOS: {str(e)}"}), 500
 
@@ -302,71 +354,26 @@ def api_campo_solicitar_registro():
         sh = get_spreadsheet()
         ws = get_or_create_base_sheet(sh)
         registros = ws.get_all_records()
-        hoy_str = datetime.now().strftime("%Y-%m-%d")
         usados = 0
-        
-        # Encontrar los índices dinámicos de las columnas ESTADO y ASIGNADO_A
-        headers = ws.row_values(1)
-        col_estado = -1
-        col_asignado = -1
-        
-        for i, h in enumerate(headers):
-            h_upper = str(h).strip().upper()
-            if h_upper == "ESTADO":
-                col_estado = i + 1
-            elif h_upper in ["ASIGNADO_A", "ASIGNADO A"]:
-                col_asignado = i + 1
-                
-        # Si no se encuentran, usamos los valores predeterminados (I y J)
-        if col_estado == -1: col_estado = 9
-        if col_asignado == -1: col_asignado = 10
 
         for idx, r in enumerate(registros, start=2):
-            estado = str(r.get("ESTADO") or r.get("Estado") or "").strip().upper()
-            asig = str(r.get("ASIGNADO_A") or r.get("Asignado_a") or r.get("ASIGNADO A") or "").strip()
-            ult_u = str(r.get("ULT_USUARIO") or r.get("Ult_Usuario") or "").strip()
-            
+            estado = str(r.get("ESTADO") or "").strip().upper()
+            asig = str(r.get("ASIGNADO_A") or "").strip()
+            ult_u = str(r.get("ULT_USUARIO") or "").strip()
             if asig.lower() in identificadores or ult_u.lower() in identificadores:
                 usados += 1
             if asig.lower() in identificadores and estado == "ASIGNADO":
                 r["_fila"] = idx
-                return jsonify({"ok": False, "msg": "Primero tipifica el registro que tienes asignado.", "registro": r}), 400
+                if not r.get("ID"):
+                    r["ID"] = f"B{1000 + idx - 1}"
+                return jsonify({"ok": True, "registro": r})
 
         if usados >= CFG_BASE["cupo"]:
             return jsonify({"ok": False, "msg": f"Llegaste a tu cupo de {CFG_BASE['cupo']} registros."}), 400
 
-        pool = []
-        for idx, r in enumerate(registros, start=2):
-            tiene_datos = any([r.get("RUC"), r.get("DNI"), r.get("RAZON_SOCIAL"), r.get("NOMBRE"), r.get("CELULAR")])
-            if not tiene_datos: continue
-            
-            estado = str(r.get("ESTADO") or r.get("Estado") or "").strip().upper()
-            if estado == "": estado = "LIBRE"
-            
-            ult_user = str(r.get("ULT_USUARIO") or r.get("Ult_Usuario") or "").strip().lower()
-            disp = str(r.get("DISPONIBLE_DESDE") or r.get("Disponible_Desde") or "").strip()
-
-            if estado == "LIBRE" and ult_user not in identificadores:
-                if not disp or disp <= hoy_str:
-                    r["_fila"] = idx
-                    if not r.get("ID"): r["ID"] = f"B{1000 + idx - 1}"
-                    pool.append(r)
-
-        if not pool:
+        elegido = asignar_nuevo_cliente_libre(ws, registros, identificadores, nombre)
+        if not elegido:
             return jsonify({"ok": False, "msg": "No hay registros libres disponibles en BASE DE DATOS."}), 404
-
-        elegido = random.choice(pool)
-        fila = elegido["_fila"]
-
-        if not ws.cell(fila, 1).value:
-            ws.update_cell(fila, 1, elegido["ID"])
-
-        # Actualización dinámica según la posición real de las columnas
-        ws.update_cell(fila, col_estado, "ASIGNADO")
-        ws.update_cell(fila, col_asignado, nombre)
-        
-        elegido["ESTADO"] = "ASIGNADO"
-        elegido["ASIGNADO_A"] = nombre
 
         return jsonify({"ok": True, "registro": elegido})
     except Exception as e:
@@ -379,6 +386,7 @@ def api_campo_tipificar():
         data = request.get_json() or {}
         usuario = session.get("usuario")
         nombre = session.get("nombre", usuario)
+        identificadores = {usuario.lower(), nombre.lower()}
 
         id_reg = str(data.get("id", "")).strip()
         fila_param = data.get("fila")
@@ -398,19 +406,40 @@ def api_campo_tipificar():
         fila_encontrada = None
         rec = None
 
-        for idx, r in enumerate(registros, start=2):
-            if (id_reg and str(r.get("ID", "")).strip() == id_reg) or (fila_param and idx == int(fila_param)):
-                fila_encontrada = idx
-                rec = r
-                break
+        # 1. PRIORIDAD ABSOLUTA A LA FILA EXACTA (_fila) PARA EVITAR COLISIÓN DE IDs DUPLICADOS
+        if fila_param:
+            try:
+                f_int = int(fila_param)
+                if 2 <= f_int <= len(registros) + 1:
+                    fila_encontrada = f_int
+                    rec = registros[f_int - 2]
+            except ValueError:
+                pass
 
-        if not rec: return jsonify({"ok": False, "msg": "No se encontró el registro en BASE DE DATOS."}), 404
+        # 2. Si no vino fila, buscar por ID pero priorizando el que esté ASIGNADO a este asesor
+        if not rec and id_reg:
+            for idx, r in enumerate(registros, start=2):
+                if str(r.get("ID", "")).strip() == id_reg and str(r.get("ASIGNADO_A", "")).strip().lower() in identificadores:
+                    fila_encontrada = idx
+                    rec = r
+                    break
+            if not rec:
+                for idx, r in enumerate(registros, start=2):
+                    if str(r.get("ID", "")).strip() == id_reg:
+                        fila_encontrada = idx
+                        rec = r
+                        break
+
+        if not rec:
+            return jsonify({"ok": False, "msg": "No se encontró el registro en BASE DE DATOS."}), 404
 
         ahora = datetime.now()
-        try: intentos = int(rec.get("INTENTOS") or 0)
-        except ValueError: intentos = 0
+        try:
+            intentos = int(rec.get("INTENTOS") or 0)
+        except ValueError:
+            intentos = 0
 
-        nuevo_estado = str(rec.get("ESTADO") or rec.get("Estado") or "LIBRE").strip().upper()
+        nuevo_estado = str(rec.get("ESTADO") or "LIBRE").strip().upper()
         asignado_a = nombre
         ult_usuario = nombre
         vence = ""
@@ -434,7 +463,7 @@ def api_campo_tipificar():
             id_venta_creada = registrar_venta_en_bandeja_back(
                 sh=sh, asesor=nombre, dni_ruc=dni_o_ruc, cliente=nom_cliente, celular=str(rec.get("CELULAR", "")),
                 distrito=str(rec.get("DISTRITO", "")), direccion=direccion_venta, coordenadas="", plan=plan_elegido,
-                observaciones=obs, origen_base_id=str(rec.get("ID") or f"Fila-{fila_encontrada}"), correo=correo_venta
+                observaciones=obs, origen_base_id=f"B{1000 + fila_encontrada - 1}", correo=correo_venta
             )
         elif sub in ["Interesado en propuesta", "Se envía propuesta"]:
             nuevo_estado = "EN GESTIÓN"
@@ -445,58 +474,76 @@ def api_campo_tipificar():
             vence = (ahora + timedelta(days=CFG_BASE["diasAgenda"])).strftime("%Y-%m-%d")
         elif sub == "No contesta":
             intentos += 1
-            if intentos >= CFG_BASE["maxNoContesta"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Máx. intentos ({obs})".strip()
-            else: soltar_a_base()
+            if intentos >= CFG_BASE["maxNoContesta"]:
+                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Máx. intentos ({obs})".strip()
+            else:
+                soltar_a_base()
         elif sub == "Corta llamada":
             intentos += 1
-            if intentos >= CFG_BASE["maxCorta"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Corta llamada x2 ({obs})".strip()
-            else: soltar_a_base()
+            if intentos >= CFG_BASE["maxCorta"]:
+                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Corta llamada x2 ({obs})".strip()
+            else:
+                soltar_a_base()
         elif sub == "Sin contacto":
             intentos += 1
-            if intentos >= CFG_BASE["maxSinContacto"]: nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Número inválido ({obs})".strip()
-            else: soltar_a_base()
+            if intentos >= CFG_BASE["maxSinContacto"]:
+                nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"Número inválido ({obs})".strip()
+            else:
+                soltar_a_base()
         elif sub == "No desea":
             nuevo_estado, asignado_a, motivo = "EXCLUIDO", "", f"No desea ({obs})".strip()
         elif sub == "Cliente crítico":
             nuevo_estado, asignado_a, motivo = "BLOQUEADO", "", f"Cliente crítico ({obs})".strip()
 
-        # Encontrar columnas dinámicas
-        headers = ws.row_values(1)
-        col_indices = {}
-        for i, h in enumerate(headers):
-            h_upper = str(h).strip().upper()
-            if h_upper == "ESTADO": col_indices["ESTADO"] = i + 1
-            elif h_upper in ["ASIGNADO_A", "ASIGNADO A"]: col_indices["ASIGNADO_A"] = i + 1
-            elif h_upper in ["ULT_USUARIO", "ULT USUARIO"]: col_indices["ULT_USUARIO"] = i + 1
-            elif h_upper == "INTENTOS": col_indices["INTENTOS"] = i + 1
-            elif h_upper == "ULT_TIPIFICACION": col_indices["ULT_TIPIFICACION"] = i + 1
-            elif h_upper == "FECHA_AGENDA": col_indices["FECHA_AGENDA"] = i + 1
-            elif h_upper == "FECHA_VENCE": col_indices["FECHA_VENCE"] = i + 1
-            elif h_upper == "DISPONIBLE_DESDE": col_indices["DISPONIBLE_DESDE"] = i + 1
-            elif h_upper == "MOTIVO_OBSERVACION": col_indices["MOTIVO_OBSERVACION"] = i + 1
+        id_unico_fila = f"B{1000 + fila_encontrada - 1}"
+        batch_updates = [
+            {"range": f"A{fila_encontrada}", "values": [[id_unico_fila]]},
+            {"range": f"I{fila_encontrada}:Q{fila_encontrada}", "values": [[
+                nuevo_estado, asignado_a, ult_usuario, intentos, plan_elegido, agenda, vence, disponible, motivo
+            ]]}
+        ]
 
-        # Actualizamos celda por celda según la estructura real del Excel
-        updates = []
-        if "ESTADO" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['ESTADO'])}", 'values': [[nuevo_estado]]})
-        if "ASIGNADO_A" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['ASIGNADO_A'])}", 'values': [[asignado_a]]})
-        if "ULT_USUARIO" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['ULT_USUARIO'])}", 'values': [[ult_usuario]]})
-        if "INTENTOS" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['INTENTOS'])}", 'values': [[intentos]]})
-        if "ULT_TIPIFICACION" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['ULT_TIPIFICACION'])}", 'values': [[plan_elegido]]})
-        if "FECHA_AGENDA" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['FECHA_AGENDA'])}", 'values': [[agenda]]})
-        if "FECHA_VENCE" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['FECHA_VENCE'])}", 'values': [[vence]]})
-        if "DISPONIBLE_DESDE" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['DISPONIBLE_DESDE'])}", 'values': [[disponible]]})
-        if "MOTIVO_OBSERVACION" in col_indices: updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila_encontrada, col_indices['MOTIVO_OBSERVACION'])}", 'values': [[motivo]]})
+        # Actualizar también en memoria para poder elegir el siguiente cliente inmediatamente
+        rec["ID"] = id_unico_fila
+        rec["ESTADO"] = nuevo_estado
+        rec["ASIGNADO_A"] = asignado_a
+        rec["ULT_USUARIO"] = ult_usuario
+        rec["INTENTOS"] = intentos
+        rec["ULT_TIPIFICACION"] = plan_elegido
 
-        if updates:
-            ws.batch_update(updates)
-        else:
-            # Si no encontró ninguna columna (por error de formato), usa la posición predeterminada (I a Q)
-            ws.update(f"I{fila_encontrada}:Q{fila_encontrada}", [[nuevo_estado, asignado_a, ult_usuario, intentos, plan_elegido, agenda, vence, disponible, motivo]])
+        # 3. LIMPIAR CUALQUIER OTRO REGISTRO "ASIGNADO" ATASCADO DE ESTE MISMO ASESOR
+        for idx2, r2 in enumerate(registros, start=2):
+            if idx2 != fila_encontrada:
+                est2 = str(r2.get("ESTADO") or "").strip().upper()
+                asig2 = str(r2.get("ASIGNADO_A") or "").strip().lower()
+                if est2 == "ASIGNADO" and asig2 in identificadores:
+                    batch_updates.append({"range": f"I{idx2}:J{idx2}", "values": [["LIBRE", ""]]})
+                    r2["ESTADO"] = "LIBRE"
+                    r2["ASIGNADO_A"] = ""
+
+        ws.batch_update(batch_updates)
+
+        # 4. ASIGNAR Y DEVOLVER AUTOMÁTICAMENTE EL SIGUIENTE CLIENTE LIBRE EN LA MISMA PETICIÓN
+        usados = sum(
+            1 for r in registros
+            if str(r.get("ASIGNADO_A") or "").strip().lower() in identificadores
+            or str(r.get("ULT_USUARIO") or "").strip().lower() in identificadores
+        )
+        siguiente_cliente = None
+        if usados < CFG_BASE["cupo"]:
+            siguiente_cliente = asignar_nuevo_cliente_libre(ws, registros, identificadores, nombre)
 
         mensaje_ok = f"Guardado: {plan_elegido}"
-        if id_venta_creada: mensaje_ok = f"¡Venta registrada! Enviada directo a Back Office ({id_venta_creada})."
+        if id_venta_creada:
+            mensaje_ok = f"¡Venta registrada! Enviada directo a Back Office ({id_venta_creada})."
 
-        return jsonify({"ok": True, "msg": mensaje_ok, "nuevo_estado": nuevo_estado, "id_venta": id_venta_creada})
+        return jsonify({
+            "ok": True,
+            "msg": mensaje_ok,
+            "nuevo_estado": nuevo_estado,
+            "id_venta": id_venta_creada,
+            "siguiente_registro": siguiente_cliente
+        })
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al guardar tipificación: {str(e)}"}), 500
 
@@ -537,9 +584,9 @@ def api_backoffice_datos():
             if not r.get("ESTADO"): r["ESTADO"] = "LIBRE"
             base_list.append(r)
 
-            st = str(r.get("ESTADO") or r.get("Estado") or "LIBRE").strip().upper()
-            asig = str(r.get("ASIGNADO_A") or r.get("Asignado_a") or r.get("ASIGNADO A") or "").strip().upper()
-            ult = str(r.get("ULT_USUARIO") or r.get("Ult_Usuario") or "").strip().upper()
+            st = str(r.get("ESTADO") or "LIBRE").strip().upper()
+            asig = str(r.get("ASIGNADO_A") or "").strip().upper()
+            ult = str(r.get("ULT_USUARIO") or "").strip().upper()
             responsable = asig or ult
 
             if responsable:
@@ -613,18 +660,7 @@ def api_backoffice_actualizar_base():
 
         sh = get_spreadsheet()
         ws_base = get_or_create_base_sheet(sh)
-        
-        # Buscar dinámicamente dónde están ESTADO y ASIGNADO_A
-        headers = ws_base.row_values(1)
-        col_est = 9
-        col_asig = 10
-        for i, h in enumerate(headers):
-            if str(h).strip().upper() == "ESTADO": col_est = i + 1
-            elif str(h).strip().upper() in ["ASIGNADO_A", "ASIGNADO A"]: col_asig = i + 1
-            
-        ws_base.update_cell(fila, col_est, nuevo_estado)
-        ws_base.update_cell(fila, col_asig, asignado_a)
-        
+        ws_base.update(f"I{fila}:J{fila}", [[nuevo_estado, asignado_a]])
         return jsonify({"ok": True, "msg": f"Registro de base actualizado a {nuevo_estado}."})
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Error al actualizar BASE DE DATOS: {str(e)}"}), 500
